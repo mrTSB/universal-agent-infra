@@ -1,0 +1,23 @@
+{
+  "name": "mobius-1",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "agent": "bun run index.ts",
+    "agent:safe": "./modal/run -- bun run agent",
+    "modal:run": "./modal/run"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.42",
+    "@anthropic-ai/sdk": "^0.74.0",
+    "convex": "^1.31.7",
+    "zod": "^4.3.6"
+  }
+}

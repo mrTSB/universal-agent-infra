@@ -1,0 +1,39 @@
+# Node
+node_modules/
+dist/
+.convex/
+output/
+.vercel
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+.eggs/
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agent workspace & state
+.mobius/
+state.json
+state.json.tmp
+productpm/
+
+# Secrets
+.env
+.env.local
+credentials.json
+*.pem
