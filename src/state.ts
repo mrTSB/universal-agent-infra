@@ -2,79 +2,78 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 // ---------------------------------------------------------------------------
-// Run state — persisted to disk so the agent survives restarts
+// Run state — persisted per agent instance
 // ---------------------------------------------------------------------------
 
 export type RunState = {
-  /** Claude SDK session ID */
   sessionId: string;
-  /** Total turns completed across all runs */
   turnCount: number;
-  /** The agent's last result text (used as context on restart) */
   lastResult: string;
-  /** ISO-8601 timestamp of the very first run */
   startedAt: string;
-  /** Accumulated API cost in USD */
   totalCostUsd: number;
 };
 
-// ---------------------------------------------------------------------------
-// Paths
-// ---------------------------------------------------------------------------
-
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..");
-const STATE_PATH = path.join(PROJECT_ROOT, "state.json");
-const WORKSPACE_DIR = path.join(PROJECT_ROOT, ".mobius");
 
-export function getWorkspacePath(): string {
-  return WORKSPACE_DIR;
-}
+/** Root directory that holds one sub-directory per agent run. */
+export const AGENTS_DIR = path.join(PROJECT_ROOT, ".agents");
 
 // ---------------------------------------------------------------------------
-// Load / Save / Clear
+// Per-agent storage factory
 // ---------------------------------------------------------------------------
 
-export function loadState(): RunState | null {
-  try {
-    const raw = fs.readFileSync(STATE_PATH, "utf-8");
-    return JSON.parse(raw) as RunState;
-  } catch {
-    return null;
-  }
-}
-
-export function saveState(state: RunState): void {
-  const tmp = `${STATE_PATH}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(state, null, 2), "utf-8");
-  fs.renameSync(tmp, STATE_PATH);
-}
-
-export function clearState(): void {
-  try {
-    fs.unlinkSync(STATE_PATH);
-  } catch {
-    // already gone — fine
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Workspace initialisation
-// ---------------------------------------------------------------------------
+export type AgentStorage = {
+  /** Absolute path to this agent's isolated workspace (git-init'd on first use). */
+  workspacePath: string;
+  load: () => RunState | null;
+  save: (state: RunState) => void;
+  ensureWorkspace: () => Promise<string>;
+};
 
 /**
- * Ensure the .mobius/ workspace directory exists and is a git repo.
- * Returns the absolute path.
+ * Create isolated storage for one agent run.
+ * Layout:  .agents/<id>/state.json
+ *          .agents/<id>/workspace/   ← agent's cwd
  */
-export async function ensureWorkspace(): Promise<string> {
-  if (!fs.existsSync(WORKSPACE_DIR)) {
-    fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
-  }
+export function createAgentStorage(agentId: string): AgentStorage {
+  const agentDir = path.join(AGENTS_DIR, agentId);
+  const statePath = path.join(agentDir, "state.json");
+  const workspacePath = path.join(agentDir, "workspace");
 
-  const gitDir = path.join(WORKSPACE_DIR, ".git");
-  if (!fs.existsSync(gitDir)) {
-    const proc = Bun.spawn(["git", "init"], { cwd: WORKSPACE_DIR, stdout: "pipe", stderr: "pipe" });
-    await proc.exited;
-  }
+  // Ensure the agent directory exists immediately
+  fs.mkdirSync(agentDir, { recursive: true });
 
-  return WORKSPACE_DIR;
+  return {
+    workspacePath,
+
+    load(): RunState | null {
+      try {
+        return JSON.parse(fs.readFileSync(statePath, "utf-8")) as RunState;
+      } catch {
+        return null;
+      }
+    },
+
+    save(state: RunState): void {
+      const tmp = `${statePath}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(state, null, 2), "utf-8");
+      fs.renameSync(tmp, statePath);
+    },
+
+    async ensureWorkspace(): Promise<string> {
+      if (!fs.existsSync(workspacePath)) {
+        fs.mkdirSync(workspacePath, { recursive: true });
+      }
+      const gitDir = path.join(workspacePath, ".git");
+      if (!fs.existsSync(gitDir)) {
+        const proc = Bun.spawn(["git", "init"], {
+          cwd: workspacePath,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        await proc.exited;
+      }
+      return workspacePath;
+    },
+  };
 }

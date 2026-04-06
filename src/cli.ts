@@ -1,7 +1,5 @@
-import * as readline from "node:readline";
 import * as path from "node:path";
-import { injectMessage, type SDKMessage } from "./agent.ts";
-import { logUserMessage } from "./logging.ts";
+import type { SDKMessage } from "./agent.ts";
 
 // ANSI
 const DIM = "\x1b[2m";
@@ -157,34 +155,3 @@ export function formatEvent(event: SDKMessage): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// CLI entry point — steering input (not the main message loop)
-// ---------------------------------------------------------------------------
-
-export async function startCli(): Promise<void> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  process.stdout.write(`\n${DIM}[autonomous — type to steer]${RESET} `);
-
-  rl.on("line", (line: string) => {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      process.stdout.write(`${DIM}[autonomous — type to steer]${RESET} `);
-      return;
-    }
-    if (trimmed.toLowerCase() === "exit") {
-      rl.close();
-      return;
-    }
-    logUserMessage(trimmed);
-    injectMessage("cli", trimmed);
-    process.stdout.write(
-      `${GREEN}[sent — interrupting current turn]${RESET}\n${DIM}[autonomous — type to steer]${RESET} `
-    );
-  });
-
-  await new Promise<void>((resolve) => rl.on("close", resolve));
-}
