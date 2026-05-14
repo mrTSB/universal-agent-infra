@@ -1,10 +1,13 @@
-# mobius-agents — Python SDK & CLI
+# mobius-agents — Python SDK
 
-Python package for creating and managing long-horizon Mobius agents without the web UI.
-Wraps the Mobius HTTP/WebSocket API with a clean SDK and a `mobius` terminal command.
+Python SDK for programmatic access to the Mobius agent infrastructure.
+Use this when you want to create and manage agents from Python code — scripts,
+notebooks, or your own applications.
 
-> **Prerequisite:** The Mobius server must be running before using this package.
-> See the main project README for server setup. Start it with `mobius start` or `bun run agent`.
+> **The Mobius server must be running** before using this SDK.
+> Start it with `bun run agent` from the project root, or use the built-in CLI (`bun run cli`).
+>
+> For terminal usage without Python, use the built-in Bun CLI: `bun run cli --help`
 
 ---
 
@@ -15,168 +18,63 @@ cd python
 pip install -e .
 ```
 
-This installs the `mobius` CLI command and the `mobius` Python package.
-
 ### Dependencies
 
 | Package | Purpose |
 |---|---|
 | `requests` | HTTP API calls |
 | `websockets` | Real-time event streaming |
-| `click` | CLI framework |
-| `rich` | Terminal formatting |
 
 ---
 
-## CLI
-
-All commands accept a `--server` flag (or `MOBIUS_SERVER` env var) to point at a non-local server.
-
-```bash
-mobius --server http://192.168.1.10:3000 list
-# or
-export MOBIUS_SERVER=http://192.168.1.10:3000
-```
-
-### Start the server
-
-```bash
-mobius start           # runs: bun run agent  (auto-detects project root)
-mobius start --safe    # runs in Modal sandbox
-```
-
-### Create an agent
-
-```bash
-mobius create "Research the top Python ML frameworks and write a comparison report"
-```
-
-Create and immediately stream its output:
-
-```bash
-mobius create "Build a web scraper for Hacker News" --watch
-```
-
-### List agents
-
-```bash
-mobius list
-```
-
-```
- ID         Status    Turns   Cost      Created    Task
- 3f2a1b8c…  running   12      $0.0143   05/14 09:12  Research the top Python ML...
- a9d4e2f1…  stopped   47      $0.1820   05/13 22:41  Build a web scraper for...
-```
-
-### Get agent details
-
-```bash
-mobius get 3f2a1b8c-...
-```
-
-### Watch live events
-
-Streams the agent's thinking, tool calls, and messages in real time:
-
-```bash
-mobius watch 3f2a1b8c-...
-```
-
-Output as raw JSON (useful for piping to `jq`):
-
-```bash
-mobius watch 3f2a1b8c-... --json | jq 'select(.type == "agent_message")'
-```
-
-Press `Ctrl+C` to stop watching — the agent keeps running.
-
-### Send a message to an agent
-
-Injects a message into the agent's conversation mid-run:
-
-```bash
-mobius send 3f2a1b8c-... "Focus only on open-source frameworks, skip commercial ones"
-```
-
-### Stop an agent
-
-```bash
-mobius stop 3f2a1b8c-...
-```
-
-### Analytics
-
-Turn-by-turn breakdown of tool usage, phases, and costs:
-
-```bash
-mobius analytics 3f2a1b8c-...
-```
-
-### AI summary
-
-Human-readable summary of what the agent did, grouped by phase:
-
-```bash
-mobius summary 3f2a1b8c-...
-```
-
-If the summary is still generating, re-run the command after a moment.
-
-### Manage API keys
-
-```bash
-mobius config status
-mobius config set ANTHROPIC_API_KEY=sk-ant-...
-mobius config set OPENROUTER_API_KEY=sk-or-...
-```
-
-Keys are persisted on the server (in `.agents/keys.json`) — you only need to set them once.
-
----
-
-## Python SDK
-
-### Basic usage
+## Quickstart
 
 ```python
 from mobius import MobiusClient
 
-client = MobiusClient()                          # defaults to http://localhost:3000
-client = MobiusClient("http://remote-host:3000") # remote server
+client = MobiusClient()  # connects to http://localhost:3000 by default
+
+agent = client.create_agent("Research the top Python ML frameworks")
+print(agent.id, agent.status)
 ```
 
-### Create and manage agents
+---
+
+## Client
 
 ```python
 from mobius import MobiusClient
 
-client = MobiusClient()
+client = MobiusClient()                           # local server
+client = MobiusClient("http://remote-host:3000")  # or remote
+```
 
+---
+
+## Agents
+
+```python
 # Create an agent — returns immediately, agent runs async on the server
-agent = client.create_agent("Research AI trends in 2025 and write a report")
-print(agent.id)      # full UUID
-print(agent.status)  # "starting" → "running"
+agent = client.create_agent("Build a web scraper for Hacker News")
+print(agent.id)             # UUID
+print(agent.status)         # "starting" → "running"
 print(agent.task)
 
 # List all agents
-agents = client.list_agents()
-for a in agents:
+for a in client.list_agents():
     print(a.id, a.status, a.turn_count, a.total_cost_usd)
 
-# Fetch current state of one agent
+# Refresh state
 agent = client.get_agent(agent.id)
 
 # Steer a running agent
-client.send_message(agent.id, "Only include peer-reviewed sources")
+client.send_message(agent.id, "Only include open-source tools")
 
-# Halt an agent
+# Stop
 client.stop_agent(agent.id)
 ```
 
-### Stream real-time events
-
-`client.stream()` is an async generator. Use it inside an `async` function:
+### Stream live events
 
 ```python
 import asyncio
@@ -189,36 +87,126 @@ async def watch(agent_id: str):
         if event.type == "agent_message":
             print("Agent:", event.data["text"])
         elif event.type == "turn_complete":
-            cost = event.data.get("cost", 0)
-            turns = event.data.get("turns", 0)
-            print(f"Turn {turns} done — ${cost:.4f}")
+            print(f"Turn {event.data['turns']} — ${event.data['cost']:.4f}")
         elif event.type == "ping":
             print("Agent needs input:", event.data["message"])
 
-asyncio.run(watch("3f2a1b8c-..."))
+asyncio.run(watch(agent.id))
 ```
 
-### Analytics and summary
+---
+
+## Custom Tools
+
+Define tools that agents can call during their runs.
+Tools can call HTTP endpoints or execute local shell commands.
+
+### List and get tools
+
+```python
+tools = client.list_tools()
+for t in tools:
+    print(t.name, t.executor["type"], "enabled" if t.enabled else "disabled")
+
+tool = client.get_tool(tool_id)
+```
+
+### Create an HTTP tool
+
+The agent sends input parameters as a JSON body and receives the response text.
+
+```python
+from mobius import MobiusClient, ToolInputSchema, JsonSchemaProperty
+
+client = MobiusClient()
+
+schema = ToolInputSchema(
+    properties={
+        "query": JsonSchemaProperty(type="string", description="Search query"),
+        "limit": JsonSchemaProperty(type="number", description="Max results"),
+    },
+    required=["query"],
+)
+
+tool = client.create_tool(
+    name="search_database",
+    description="Search the internal product database. Use when the user asks about specific products or inventory.",
+    executor={
+        "type": "http",
+        "url": "http://localhost:8080/api/search",
+        "method": "POST",
+        # "headers": {"Authorization": "Bearer sk-..."},  # optional
+    },
+    input_schema=schema,
+)
+print(tool.id, tool.name)
+```
+
+### Create a shell tool
+
+Parameter values are shell-quoted and substituted into the command via `{{param_name}}`.
+
+```python
+tool = client.create_tool(
+    name="run_tests",
+    description="Run the project test suite. Use before committing code changes.",
+    executor={
+        "type": "shell",
+        "command": "npm test -- --testPathPattern={{pattern}}",
+        # "cwd": "/path/to/project",  # defaults to agent workspace
+        # "timeout": 60000,            # ms, default 30000
+    },
+    input_schema=ToolInputSchema(
+        properties={"pattern": JsonSchemaProperty(type="string", description="Test file pattern")},
+    ),
+)
+```
+
+### No-parameter tool
+
+Omit `input_schema` for tools that take no arguments:
+
+```python
+tool = client.create_tool(
+    name="get_server_status",
+    description="Check if the production server is healthy.",
+    executor={"type": "http", "url": "http://prod/health", "method": "GET"},
+)
+```
+
+### Update and toggle
+
+```python
+# Update any fields
+client.update_tool(tool.id, description="Updated description", enabled=False)
+
+# Toggle enabled/disabled
+updated = client.toggle_tool(tool.id)
+print(updated.enabled)  # True / False
+
+# Delete
+client.delete_tool(tool.id)
+```
+
+---
+
+## Analytics and Summary
 
 ```python
 analytics = client.get_analytics(agent.id)
-# {
-#   "turns": [...],
-#   "phases": [...],
-#   "totalCost": 0.0143,
-#   ...
-# }
+# dict with turn-by-turn breakdown of tool usage, phases, costs
 
 summary = client.get_summary(agent.id)
-# summary["state"]           → "ready" | "generating" | "error"
-# summary["summary"]["overall"]  → one-sentence description
-# summary["summary"]["phases"]   → list of phase summaries
+# summary["state"]                → "ready" | "generating" | "error"
+# summary["summary"]["overall"]   → one-sentence description
+# summary["summary"]["phases"]    → list of phase summaries
 
-# Force regeneration
-client.invalidate_summary(agent.id)
+client.invalidate_summary(agent.id)  # force regeneration
 ```
 
-### Config
+---
+
+## Config
 
 ```python
 cfg = client.get_config()
@@ -240,7 +228,7 @@ client.set_config(ANTHROPIC_API_KEY="sk-ant-...")
 | `status` | `str` | `starting` / `running` / `stopped` / `error` |
 | `created_at` | `str` | ISO timestamp |
 | `url` | `str` | Path to web UI page (`/agents/{id}`) |
-| `turn_count` | `int` | Number of completed turns |
+| `turn_count` | `int` | Completed turns |
 | `total_cost_usd` | `float` | Cumulative API cost |
 | `workspace_path` | `str` | Absolute path to agent's workspace on the server |
 
@@ -248,30 +236,49 @@ client.set_config(ANTHROPIC_API_KEY="sk-ant-...")
 
 | Field | Type | Description |
 |---|---|---|
-| `type` | `str` | Event type (see below) |
+| `type` | `str` | Event type (see table below) |
 | `ts` | `str \| None` | ISO timestamp |
-| `data` | `dict` | Full raw event payload |
+| `data` | `dict` | Full raw payload |
 
 **Event types:**
 
-| Type | When | Key fields in `data` |
+| Type | When | Key fields |
 |---|---|---|
 | `connected` | First connection | `agentId`, `task` |
-| `history` | Replay on reconnect | `messages: list` |
-| `thinking` | Agent is reasoning | — |
+| `thinking` | Agent reasoning | — |
 | `tool_use` | Tool invoked | `name`, `input` |
 | `tool_result` | Tool returned | `summary` |
 | `agent_message` | Agent produced text | `text` |
-| `turn_complete` | Turn finished | `cost`, `turns`, `duration_ms`, `stop_reason` |
+| `turn_complete` | Turn finished | `cost`, `turns`, `duration_ms` |
 | `ping` | Agent asked a question | `message` |
 | `user_message` | Human message injected | `text` |
 | `status` | Agent stopping | `text` |
 
-### `ConfigStatus`
+### `CustomTool`
 
 | Field | Type | Description |
 |---|---|---|
-| `keys` | `dict[str, bool]` | Key name → whether it is set |
+| `id` | `str` | UUID |
+| `name` | `str` | snake_case identifier |
+| `description` | `str` | Shown to the model |
+| `input_schema` | `ToolInputSchema` | Parameter definitions |
+| `executor` | `dict` | `{"type": "http" \| "shell", ...}` |
+| `enabled` | `bool` | Whether agents can call this tool |
+| `created_at` / `updated_at` | `str` | ISO timestamps |
+
+### `ToolInputSchema`
+
+| Field | Type | Description |
+|---|---|---|
+| `properties` | `dict[str, JsonSchemaProperty]` | Parameter definitions |
+| `required` | `list[str]` | Names of required parameters |
+
+### `JsonSchemaProperty`
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | `str` | `string` / `number` / `integer` / `boolean` / `array` |
+| `description` | `str \| None` | Shown to the model alongside the parameter |
 
 ---
 
@@ -281,37 +288,32 @@ client.set_config(ANTHROPIC_API_KEY="sk-ant-...")
 from mobius import ServerNotRunningError, AgentNotFoundError, MobiusError
 
 try:
-    agents = client.list_agents()
+    client.list_agents()
 except ServerNotRunningError:
-    print("Start the server first: mobius start")
+    print("Start the server: bun run agent")
 except AgentNotFoundError:
-    print("That agent ID does not exist")
+    print("Agent ID not found")
 except MobiusError as e:
-    print("Unexpected error:", e)
+    print("Error:", e)
 ```
 
 ---
 
 ## Extending the package
 
-The package is structured to be easy to extend:
-
 ```
 python/
   mobius/
-    __init__.py     exports — update when adding public symbols
+    __init__.py     public exports — update when adding symbols
     client.py       MobiusClient — add new API methods here
     models.py       dataclasses — add fields as the server API grows
-    streaming.py    WebSocket logic — isolated, easy to swap
+    streaming.py    WebSocket logic
     exceptions.py   error types
-    cli.py          Click commands — add a new @main.command() to expose new methods
   pyproject.toml    bump version here when releasing
 ```
 
 **Adding a new API endpoint:**
 1. Add a method to `MobiusClient` in `client.py`
-2. Add a corresponding `@main.command()` in `cli.py`
-3. Export any new models from `__init__.py`
+2. Add any new response types to `models.py`
+3. Export new symbols from `__init__.py`
 4. Bump the version in `pyproject.toml`
-
-**Versioning:** follows the Mobius server version. A `0.x` package talks to a `0.x` server.

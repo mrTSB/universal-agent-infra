@@ -7,6 +7,7 @@ import {
 import { createSupportServer } from "./tools.ts";
 import { REPROMPT_MESSAGE } from "./system-prompt.ts";
 import type { RunState } from "./state.ts";
+import type { CustomTool } from "./tool-registry.ts";
 
 export type { SDKMessage };
 
@@ -30,6 +31,8 @@ export type AgentOptions = {
   pingHuman: (message: string) => Promise<void>;
   /** Called when the agent wants to read pending human replies. */
   checkReplies: () => Promise<string[]>;
+  /** User-defined custom tools to register for this run. */
+  customTools?: CustomTool[];
   onEvent: (event: SDKMessage) => void;
   onMessage: (text: string) => Promise<void>;
   onTurnComplete: (result: TurnResult) => void;
@@ -233,13 +236,22 @@ export function createAgent(opts: AgentOptions): AgentHandle {
 
   // ── Start ─────────────────────────────────────────────────────────────────
 
+  const enabledCustomTools = (opts.customTools ?? []).filter((t) => t.enabled);
+
   const supportServer = createSupportServer({
     pingHuman: opts.pingHuman,
     checkReplies: opts.checkReplies,
+    customTools: enabledCustomTools,
+    agentCwd: opts.cwd,
   });
 
   const mcpServers: Record<string, unknown> = { support: supportServer };
-  const allowedTools = ["ping_human", "check_replies", "read_software_engineering_guide"];
+  const allowedTools = [
+    "ping_human",
+    "check_replies",
+    "read_software_engineering_guide",
+    ...enabledCustomTools.map((t) => t.name),
+  ];
 
   const bbConfig = browserbaseMcpConfig();
   if (bbConfig) {

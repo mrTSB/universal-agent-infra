@@ -1,8 +1,8 @@
 import requests
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from .exceptions import AgentNotFoundError, MobiusError, ServerNotRunningError
-from .models import Agent, AgentEvent, ConfigStatus
+from .models import Agent, AgentEvent, ConfigStatus, CustomTool, ToolInputSchema
 
 
 class MobiusClient:
@@ -93,6 +93,57 @@ class MobiusClient:
             client.set_config(ANTHROPIC_API_KEY="sk-ant-...")
         """
         self._req("POST", "/api/config", json=keys)
+
+    # ── Tools ────────────────────────────────────────────────────────────────
+
+    def list_tools(self) -> List[CustomTool]:
+        """Return all defined custom tools."""
+        return [CustomTool.from_dict(t) for t in self._req("GET", "/api/tools").json()]
+
+    def get_tool(self, tool_id: str) -> CustomTool:
+        """Fetch a single custom tool by ID."""
+        return CustomTool.from_dict(self._req("GET", f"/api/tools/{tool_id}").json())
+
+    def create_tool(
+        self,
+        name: str,
+        description: str,
+        executor: Dict[str, Any],
+        input_schema: Optional[ToolInputSchema] = None,
+        enabled: bool = True,
+    ) -> CustomTool:
+        """
+        Create a new custom tool.
+
+        executor examples:
+            HTTP:  {"type": "http", "url": "http://...", "method": "POST"}
+            Shell: {"type": "shell", "command": "python script.py --q '{{query}}'"}
+
+        input_schema: use ToolInputSchema(...) to define parameters, or omit for no-param tools.
+        """
+        body: Dict[str, Any] = {
+            "name": name,
+            "description": description,
+            "inputSchema": input_schema.to_dict() if input_schema else {"type": "object", "properties": {}},
+            "executor": executor,
+            "enabled": enabled,
+        }
+        return CustomTool.from_dict(self._req("POST", "/api/tools", json=body).json())
+
+    def update_tool(self, tool_id: str, **fields: Any) -> CustomTool:
+        """
+        Update fields on an existing tool.
+        Pass any subset of: name, description, executor, inputSchema, enabled.
+        """
+        return CustomTool.from_dict(self._req("PUT", f"/api/tools/{tool_id}", json=fields).json())
+
+    def delete_tool(self, tool_id: str) -> None:
+        """Permanently delete a custom tool."""
+        self._req("DELETE", f"/api/tools/{tool_id}")
+
+    def toggle_tool(self, tool_id: str) -> CustomTool:
+        """Toggle enabled/disabled state of a tool."""
+        return CustomTool.from_dict(self._req("POST", f"/api/tools/{tool_id}/toggle").json())
 
     # ── Streaming ────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 from .client import MobiusClient
 from .exceptions import AgentNotFoundError, MobiusError, ServerNotRunningError
-from .models import Agent, AgentEvent, ConfigStatus
+from .models import Agent, AgentEvent, ConfigStatus, CustomTool, ToolInputSchema, JsonSchemaProperty
 
 __version__ = "0.1.0"
 
@@ -9,6 +9,9 @@ __all__ = [
     "Agent",
     "AgentEvent",
     "ConfigStatus",
+    "CustomTool",
+    "ToolInputSchema",
+    "JsonSchemaProperty",
     "MobiusError",
     "ServerNotRunningError",
     "AgentNotFoundError",

@@ -5,6 +5,7 @@ import { formatEvent } from "./cli.ts";
 import { logEvent } from "./logging.ts";
 import * as registry from "./agent-registry.ts";
 import { invalidate as invalidateAISummary } from "./ai-summary.ts";
+import * as toolRegistry from "./tool-registry.ts";
 
 // ---------------------------------------------------------------------------
 // SDK event → UI broadcast
@@ -105,11 +106,14 @@ export async function startRun(opts: StartRunOptions): Promise<registry.AgentRec
   // The SDK's total_cost_usd is cumulative since query() was called — NOT per-turn.
   let lastReportedCostUsd = 0;
 
+  const customTools = toolRegistry.list();
+
   const handle = createAgent({
     systemPrompt: SYSTEM_PROMPT,
     cwd: workspacePath,
     initialMessage,
     previousState,
+    customTools,
 
     pingHuman: async (message) => {
       registry.broadcast(id, { type: "ping", message, ts: Date.now() });

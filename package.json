@@ -6,7 +6,8 @@
   "scripts": {
     "agent": "bun run index.ts",
     "agent:safe": "./modal/run -- bun run agent",
-    "modal:run": "./modal/run"
+    "modal:run": "./modal/run",
+    "cli": "bun run src/cli-main.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

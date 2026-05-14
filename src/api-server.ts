@@ -3,6 +3,7 @@ import * as registry from "./agent-registry.ts";
 import { startRun, stopRun } from "./agent-run.ts";
 import * as aiSummary from "./ai-summary.ts";
 import * as config from "./config.ts";
+import * as toolRegistry from "./tool-registry.ts";
 
 const PORT = parseInt(process.env["UI_PORT"] ?? "3000");
 
@@ -49,6 +50,11 @@ export function startAPIServer(): void {
         return html(buildDashboardHTML());
       }
 
+      // ── Tools page ─────────────────────────────────────────────────────
+      if (pathname === "/tools") {
+        return html(buildToolsHTML());
+      }
+
       // ── REST API ───────────────────────────────────────────────────────
       if (pathname === "/api/config" && method === "GET") {
         return json({ keys: config.status() });
@@ -56,6 +62,38 @@ export function startAPIServer(): void {
 
       if (pathname === "/api/config" && method === "POST") {
         return handleSaveConfig(req);
+      }
+
+      // ── Tools API ──────────────────────────────────────────────────────
+      if (pathname === "/api/tools" && method === "GET") {
+        return json(toolRegistry.list());
+      }
+
+      if (pathname === "/api/tools" && method === "POST") {
+        return handleCreateTool(req);
+      }
+
+      const toolMatch = pathname.match(/^\/api\/tools\/([^/]+)$/);
+      if (toolMatch) {
+        const toolId = toolMatch[1];
+        if (method === "GET") {
+          const t = toolRegistry.get(toolId);
+          return t ? json(t) : json({ error: "Not found" }, 404);
+        }
+        if (method === "PUT") return handleUpdateTool(toolId, req);
+        if (method === "DELETE") {
+          const removed = toolRegistry.remove(toolId);
+          return removed ? json({ deleted: true }) : json({ error: "Not found" }, 404);
+        }
+      }
+
+      const toolToggleMatch = pathname.match(/^\/api\/tools\/([^/]+)\/toggle$/);
+      if (toolToggleMatch && method === "POST") {
+        const toolId = toolToggleMatch[1];
+        const t = toolRegistry.get(toolId);
+        if (!t) return json({ error: "Not found" }, 404);
+        const updated = toolRegistry.update(toolId, { enabled: !t.enabled });
+        return json(updated);
       }
 
       if (pathname === "/api/agents" && method === "GET") {
@@ -261,6 +299,32 @@ async function handleSendMessage(agentId: string, req: Request): Promise<Respons
   return json({ delivered: true });
 }
 
+async function handleCreateTool(req: Request): Promise<Response> {
+  let body: Record<string, unknown>;
+  try { body = (await req.json()) as Record<string, unknown>; }
+  catch { return json({ error: "Invalid JSON body" }, 400); }
+
+  try {
+    const t = toolRegistry.create(body as Parameters<typeof toolRegistry.create>[0]);
+    return json(t, 201);
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+}
+
+async function handleUpdateTool(toolId: string, req: Request): Promise<Response> {
+  let body: Record<string, unknown>;
+  try { body = (await req.json()) as Record<string, unknown>; }
+  catch { return json({ error: "Invalid JSON body" }, 400); }
+
+  try {
+    const t = toolRegistry.update(toolId, body as Parameters<typeof toolRegistry.update>[1]);
+    return t ? json(t) : json({ error: "Not found" }, 404);
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Response helpers
 // ---------------------------------------------------------------------------
@@ -424,6 +488,7 @@ function buildDashboardHTML(): string {
   <h1>Agent Runs</h1>
   <div id="header-right">
     <span id="run-count" style="font-size:12px;color:#444;"></span>
+    <a href="/tools" class="btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center;">⚡ Tools</a>
     <button class="btn-ghost" onclick="toggleSettings()" id="settings-btn">⚙ Settings</button>
     <button class="btn-primary" onclick="toggleNewRun()">+ New Run</button>
   </div>
@@ -2020,6 +2085,369 @@ style.textContent = '@keyframes spin { from{transform:rotate(0deg)} to{transform
 document.head.appendChild(style);
 
 loadData();
+</script>
+</body>
+</html>`;
+}
+
+// ---------------------------------------------------------------------------
+// Tools management page
+// ---------------------------------------------------------------------------
+
+function buildToolsHTML(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Custom Tools</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: #0d0d0d; color: #e2e2e2; min-height: 100vh; }
+  a { color: inherit; text-decoration: none; }
+  button { cursor: pointer; border: none; border-radius: 7px; font-size: 13px; font-weight: 500; font-family: inherit; transition: background 0.15s; }
+  .btn-primary { background: #1e3a8a; color: #93c5fd; padding: 8px 14px; }
+  .btn-primary:hover { background: #1d4ed8; color: #fff; }
+  .btn-danger  { background: #3f0000; color: #f87171; padding: 5px 10px; font-size: 12px; }
+  .btn-danger:hover { background: #7f1d1d; }
+  .btn-ghost { background: transparent; color: #555; padding: 5px 10px; font-size: 12px; border: 1px solid #222; }
+  .btn-ghost:hover { color: #aaa; border-color: #444; }
+  .btn-sm { padding: 4px 9px; font-size: 12px; }
+
+  #header { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: #141414; border-bottom: 1px solid #1e1e1e; }
+  #header h1 { font-size: 15px; font-weight: 600; color: #f0f0f0; }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .back-link { color: #444; font-size: 12px; }
+  .back-link:hover { color: #888; }
+
+  #main { padding: 24px; max-width: 900px; }
+  .empty { color: #333; font-size: 13px; padding: 40px 0; text-align: center; }
+
+  .tool-card { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 12px; transition: border-color 0.15s; }
+  .tool-card:hover { border-color: #2a2a2a; }
+  .tool-body { flex: 1; min-width: 0; }
+  .tool-name { font-size: 13.5px; color: #e2e2e2; font-family: "SF Mono","Fira Code",monospace; margin-bottom: 4px; }
+  .tool-desc { font-size: 12.5px; color: #555; line-height: 1.5; margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tool-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .badge { font-size: 10.5px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+  .badge-http  { background: #0c2340; color: #60a5fa; }
+  .badge-shell { background: #1a1200; color: #fbbf24; }
+  .badge-params { background: #111; color: #555; }
+  .tool-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: flex-start; }
+
+  .toggle { position: relative; width: 32px; height: 18px; flex-shrink: 0; margin-top: 1px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; background: #222; border-radius: 18px; cursor: pointer; transition: background 0.2s; }
+  .toggle-slider::before { content: ""; position: absolute; height: 12px; width: 12px; left: 3px; bottom: 3px; background: #555; border-radius: 50%; transition: transform 0.2s, background 0.2s; }
+  .toggle input:checked + .toggle-slider { background: #1e3a8a; }
+  .toggle input:checked + .toggle-slider::before { transform: translateX(14px); background: #93c5fd; }
+
+  #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: flex-start; justify-content: center; padding: 40px 20px; overflow-y: auto; }
+  #modal-overlay.open { display: flex; }
+  #modal { background: #141414; border: 1px solid #222; border-radius: 12px; width: 100%; max-width: 640px; padding: 24px; }
+  #modal-title { font-size: 15px; font-weight: 600; color: #f0f0f0; margin-bottom: 20px; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 11.5px; color: #666; margin-bottom: 6px; display: block; }
+  .form-input, .form-select, .form-textarea {
+    width: 100%; background: #0d0d0d; border: 1px solid #222; border-radius: 8px;
+    color: #e2e2e2; font-size: 13px; font-family: inherit; padding: 9px 12px;
+    outline: none; transition: border-color 0.2s;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #1e3a8a; }
+  .form-select { cursor: pointer; }
+  .form-textarea { resize: vertical; min-height: 70px; }
+  .form-mono { font-family: "SF Mono","Fira Code",monospace; font-size: 12px; }
+  .form-hint { font-size: 11px; color: #3a3a3a; margin-top: 4px; }
+
+  .params-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .params-header .form-label { margin: 0; }
+  #params-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 8px; }
+  #params-table th { text-align: left; color: #444; font-weight: 500; padding: 4px 6px; border-bottom: 1px solid #1e1e1e; }
+  #params-table td { padding: 4px 4px; vertical-align: middle; }
+  #params-table input, #params-table select { background: #0d0d0d; border: 1px solid #1e1e1e; border-radius: 5px; color: #e2e2e2; font-size: 12px; font-family: inherit; padding: 5px 7px; outline: none; width: 100%; }
+  #params-table input:focus, #params-table select:focus { border-color: #1e3a8a; }
+  .td-req { text-align: center; width: 50px; }
+  .td-del { text-align: center; width: 32px; }
+  .del-param { background: transparent; border: none; color: #555; font-size: 14px; cursor: pointer; padding: 2px 4px; }
+  .del-param:hover { color: #f87171; }
+
+  #exec-http, #exec-shell { display: none; }
+  #exec-http.active, #exec-shell.active { display: block; }
+
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #1a1a1a; }
+
+  #toast { display: none; position: fixed; bottom: 24px; right: 24px; background: #141414; border: 1px solid #222; border-radius: 8px; padding: 10px 16px; font-size: 13px; z-index: 200; }
+  #toast.error { border-color: #7f1d1d; color: #f87171; }
+  #toast.success { border-color: #14532d; color: #4ade80; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div class="header-left">
+    <a href="/" class="back-link">← Agents</a>
+    <h1>Custom Tools</h1>
+  </div>
+  <button class="btn-primary" onclick="openModal()">+ New Tool</button>
+</div>
+
+<div id="main">
+  <div id="empty" class="empty" style="display:none">No custom tools yet. Click "+ New Tool" to define one.</div>
+  <div id="tool-list"></div>
+</div>
+
+<div id="modal-overlay" onclick="maybeClose(event)">
+  <div id="modal">
+    <div id="modal-title">New Tool</div>
+
+    <div class="form-group">
+      <label class="form-label">Name <span style="color:#3a3a3a">(snake_case — this is what the agent calls)</span></label>
+      <input id="f-name" class="form-input form-mono" placeholder="search_database" />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Description <span style="color:#3a3a3a">(shown to the model — be specific about when to use it)</span></label>
+      <textarea id="f-desc" class="form-textarea" rows="2" placeholder="Search the internal database for records matching a query."></textarea>
+    </div>
+
+    <div class="form-group">
+      <div class="params-header">
+        <label class="form-label">Parameters</label>
+        <button class="btn-ghost btn-sm" onclick="addParam()">+ Add</button>
+      </div>
+      <table id="params-table">
+        <thead><tr>
+          <th style="width:28%">Name</th>
+          <th style="width:20%">Type</th>
+          <th>Description</th>
+          <th class="td-req">Req</th>
+          <th class="td-del"></th>
+        </tr></thead>
+        <tbody id="params-body"></tbody>
+      </table>
+      <div class="form-hint">Add a parameter for each piece of input the agent should provide when calling this tool.</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Executor</label>
+      <select id="f-executor-type" class="form-select" onchange="switchExecutor(this.value)">
+        <option value="http">HTTP — call a URL endpoint</option>
+        <option value="shell">Shell — run a local command</option>
+      </select>
+    </div>
+
+    <div id="exec-http" class="active">
+      <div class="form-group">
+        <label class="form-label">URL</label>
+        <input id="f-http-url" class="form-input form-mono" placeholder="http://localhost:8080/api/search" />
+      </div>
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:0 0 120px">
+          <label class="form-label">Method</label>
+          <select id="f-http-method" class="form-select">
+            <option>POST</option><option>GET</option><option>PUT</option><option>PATCH</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Extra Headers <span style="color:#3a3a3a">(JSON, optional)</span></label>
+          <input id="f-http-headers" class="form-input form-mono" placeholder='{"Authorization": "Bearer ..."}' />
+        </div>
+      </div>
+      <div class="form-hint">Input is sent as JSON body (POST/PUT/PATCH) or query string (GET). Response body is returned to the agent.</div>
+    </div>
+
+    <div id="exec-shell">
+      <div class="form-group">
+        <label class="form-label">Command <span style="color:#3a3a3a">(use {{param_name}} for substitution)</span></label>
+        <input id="f-shell-cmd" class="form-input form-mono" placeholder="python scripts/search.py --query '{{query}}'" />
+      </div>
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Working directory <span style="color:#3a3a3a">(defaults to agent workspace)</span></label>
+          <input id="f-shell-cwd" class="form-input form-mono" placeholder="/path/to/project" />
+        </div>
+        <div class="form-group" style="flex:0 0 120px">
+          <label class="form-label">Timeout (ms)</label>
+          <input id="f-shell-timeout" class="form-input" type="number" placeholder="30000" />
+        </div>
+      </div>
+      <div class="form-hint">stdout+stderr returned to agent. Parameters are shell-quoted before substitution.</div>
+    </div>
+
+    <div id="form-error" style="color:#f87171;font-size:12px;margin-top:8px;display:none"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveTool()">Save Tool</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let tools = [], editingId = null;
+
+async function load() {
+  tools = await fetch('/api/tools').then(r => r.json());
+  render();
+}
+
+function render() {
+  const list = document.getElementById('tool-list');
+  const empty = document.getElementById('empty');
+  if (!tools.length) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  list.innerHTML = tools.map(t => {
+    const ex = t.executor;
+    const exB = ex.type === 'http'
+      ? \`<span class="badge badge-http">HTTP \${ex.method||'POST'}</span>\`
+      : '<span class="badge badge-shell">shell</span>';
+    const pc = Object.keys(t.inputSchema?.properties || {}).length;
+    const pB = pc ? \`<span class="badge badge-params">\${pc} param\${pc>1?'s':''}</span>\` : '';
+    return \`<div class="tool-card">
+      <label class="toggle" title="\${t.enabled?'Disable':'Enable'}">
+        <input type="checkbox" \${t.enabled?'checked':''} onchange="toggle('\${t.id}',this)">
+        <span class="toggle-slider"></span>
+      </label>
+      <div class="tool-body">
+        <div class="tool-name">\${t.name}</div>
+        <div class="tool-desc">\${t.description}</div>
+        <div class="tool-meta">\${exB}\${pB}</div>
+      </div>
+      <div class="tool-actions">
+        <button class="btn-ghost btn-sm" onclick="editTool('\${t.id}')">Edit</button>
+        <button class="btn-danger btn-sm" onclick="deleteTool('\${t.id}','\${t.name}')">Delete</button>
+      </div>
+    </div>\`;
+  }).join('');
+}
+
+async function toggle(id, el) {
+  const r = await fetch(\`/api/tools/\${id}/toggle\`, { method: 'POST' });
+  if (!r.ok) { el.checked = !el.checked; toast('Toggle failed', true); return; }
+  const t = await r.json();
+  tools = tools.map(x => x.id === id ? t : x);
+  toast(t.enabled ? 'Tool enabled' : 'Tool disabled');
+}
+
+async function deleteTool(id, name) {
+  if (!confirm(\`Delete "\${name}"?\`)) return;
+  const r = await fetch(\`/api/tools/\${id}\`, { method: 'DELETE' });
+  if (!r.ok) { toast('Delete failed', true); return; }
+  tools = tools.filter(t => t.id !== id);
+  render(); toast('Tool deleted');
+}
+
+function openModal(t) {
+  editingId = t ? t.id : null;
+  document.getElementById('modal-title').textContent = t ? 'Edit Tool' : 'New Tool';
+  document.getElementById('form-error').style.display = 'none';
+  document.getElementById('f-name').value = t?.name || '';
+  document.getElementById('f-desc').value = t?.description || '';
+  document.getElementById('params-body').innerHTML = '';
+  const props = t?.inputSchema?.properties || {};
+  const req = new Set(t?.inputSchema?.required || []);
+  for (const [k, v] of Object.entries(props)) addParam(k, v.type, v.description, req.has(k));
+  const exType = t?.executor?.type || 'http';
+  document.getElementById('f-executor-type').value = exType;
+  switchExecutor(exType);
+  if (exType === 'http') {
+    document.getElementById('f-http-url').value = t?.executor?.url || '';
+    document.getElementById('f-http-method').value = t?.executor?.method || 'POST';
+    document.getElementById('f-http-headers').value = t?.executor?.headers ? JSON.stringify(t.executor.headers) : '';
+  } else {
+    document.getElementById('f-shell-cmd').value = t?.executor?.command || '';
+    document.getElementById('f-shell-cwd').value = t?.executor?.cwd || '';
+    document.getElementById('f-shell-timeout').value = t?.executor?.timeout || '';
+  }
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); editingId = null; }
+function maybeClose(e) { if (e.target === document.getElementById('modal-overlay')) closeModal(); }
+function editTool(id) { const t = tools.find(x => x.id === id); if (t) openModal(t); }
+function switchExecutor(v) {
+  document.getElementById('exec-http').classList.toggle('active', v === 'http');
+  document.getElementById('exec-shell').classList.toggle('active', v === 'shell');
+}
+
+let pi = 0;
+function addParam(name, type, desc, required) {
+  const id = pi++;
+  const tr = document.createElement('tr');
+  tr.id = 'pr-' + id;
+  tr.innerHTML = \`
+    <td><input class="pname" value="\${name||''}" placeholder="param_name"/></td>
+    <td><select class="ptype">
+      <option value="string" \${!type||type==='string'?'selected':''}>string</option>
+      <option value="number" \${type==='number'?'selected':''}>number</option>
+      <option value="integer" \${type==='integer'?'selected':''}>integer</option>
+      <option value="boolean" \${type==='boolean'?'selected':''}>boolean</option>
+      <option value="array" \${type==='array'?'selected':''}>array</option>
+    </select></td>
+    <td><input class="pdesc" value="\${desc||''}" placeholder="What this parameter does"/></td>
+    <td class="td-req"><input type="checkbox" class="preq" \${required?'checked':''}></td>
+    <td class="td-del"><button class="del-param" onclick="document.getElementById('pr-\${id}').remove()">×</button></td>\`;
+  document.getElementById('params-body').appendChild(tr);
+}
+
+function collectParams() {
+  const props = {}, req = [];
+  for (const row of document.getElementById('params-body').rows) {
+    const name = row.querySelector('.pname').value.trim();
+    if (!name) continue;
+    const type = row.querySelector('.ptype').value;
+    const desc = row.querySelector('.pdesc').value.trim();
+    props[name] = { type, ...(desc ? { description: desc } : {}) };
+    if (row.querySelector('.preq').checked) req.push(name);
+  }
+  return { type: 'object', properties: props, ...(req.length ? { required: req } : {}) };
+}
+
+async function saveTool() {
+  const errEl = document.getElementById('form-error');
+  errEl.style.display = 'none';
+  const name = document.getElementById('f-name').value.trim();
+  const description = document.getElementById('f-desc').value.trim();
+  if (!name) { errEl.textContent = 'Name is required'; errEl.style.display = 'block'; return; }
+  if (!description) { errEl.textContent = 'Description is required'; errEl.style.display = 'block'; return; }
+  const exType = document.getElementById('f-executor-type').value;
+  let executor;
+  if (exType === 'http') {
+    const url = document.getElementById('f-http-url').value.trim();
+    if (!url) { errEl.textContent = 'URL is required'; errEl.style.display = 'block'; return; }
+    const hr = document.getElementById('f-http-headers').value.trim();
+    let headers;
+    if (hr) { try { headers = JSON.parse(hr); } catch { errEl.textContent = 'Headers must be valid JSON'; errEl.style.display = 'block'; return; } }
+    executor = { type: 'http', url, method: document.getElementById('f-http-method').value, ...(headers ? { headers } : {}) };
+  } else {
+    const command = document.getElementById('f-shell-cmd').value.trim();
+    if (!command) { errEl.textContent = 'Command is required'; errEl.style.display = 'block'; return; }
+    const cwd = document.getElementById('f-shell-cwd').value.trim();
+    const timeout = parseInt(document.getElementById('f-shell-timeout').value) || undefined;
+    executor = { type: 'shell', command, ...(cwd ? { cwd } : {}), ...(timeout ? { timeout } : {}) };
+  }
+  const body = { name, description, inputSchema: collectParams(), executor, enabled: true };
+  const r = await fetch(editingId ? \`/api/tools/\${editingId}\` : '/api/tools', {
+    method: editingId ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json();
+  if (!r.ok) { errEl.textContent = data.error || 'Save failed'; errEl.style.display = 'block'; return; }
+  if (editingId) tools = tools.map(t => t.id === editingId ? data : t);
+  else tools.push(data);
+  render(); closeModal(); toast(editingId ? 'Tool updated' : 'Tool created');
+}
+
+function toast(msg, isErr) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = isErr ? 'error' : 'success'; el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 2500);
+}
+
+load();
 </script>
 </body>
 </html>`;
