@@ -4,34 +4,37 @@ import { SYSTEM_PROMPT, INITIAL_MESSAGE } from "./system-prompt.ts";
 import { formatEvent } from "./cli.ts";
 import { logEvent } from "./logging.ts";
 import * as registry from "./agent-registry.ts";
+import { invalidate as invalidateAISummary } from "./ai-summary.ts";
 
 // ---------------------------------------------------------------------------
 // SDK event → UI broadcast
 // ---------------------------------------------------------------------------
 
 function broadcastSDKEvent(agentId: string, event: SDKMessage): void {
+  const ts = Date.now();
   switch (event.type) {
     case "assistant": {
       for (const block of event.message.content) {
         if (block.type === "thinking") {
-          registry.broadcast(agentId, { type: "thinking" });
+          registry.broadcast(agentId, { type: "thinking", ts });
         } else if (block.type === "tool_use") {
           const input = (
             typeof block.input === "object" && block.input !== null ? block.input : {}
           ) as Record<string, unknown>;
-          registry.broadcast(agentId, { type: "tool_use", name: block.name, input });
+          registry.broadcast(agentId, { type: "tool_use", name: block.name, input, ts });
         }
       }
       break;
     }
     case "tool_use_summary":
-      registry.broadcast(agentId, { type: "tool_result", summary: event.summary });
+      registry.broadcast(agentId, { type: "tool_result", summary: event.summary, ts });
       break;
     case "tool_progress":
       registry.broadcast(agentId, {
         type: "tool_progress",
         tool: event.tool_name,
         elapsed: event.elapsed_time_seconds,
+        ts,
       });
       break;
     case "result":
@@ -39,6 +42,10 @@ function broadcastSDKEvent(agentId: string, event: SDKMessage): void {
         type: "turn_complete",
         cost: "total_cost_usd" in event ? (event.total_cost_usd as number) : 0,
         turns: "num_turns" in event ? (event.num_turns as number) : 0,
+        usage: "usage" in event ? (event as Record<string, unknown>)["usage"] : null,
+        duration_ms: "duration_ms" in event ? (event as Record<string, unknown>)["duration_ms"] : null,
+        stop_reason: "stop_reason" in event ? (event as Record<string, unknown>)["stop_reason"] : null,
+        ts,
       });
       break;
     default:
@@ -105,7 +112,7 @@ export async function startRun(opts: StartRunOptions): Promise<registry.AgentRec
     previousState,
 
     pingHuman: async (message) => {
-      registry.broadcast(id, { type: "ping", message });
+      registry.broadcast(id, { type: "ping", message, ts: Date.now() });
     },
 
     checkReplies: async () => {
@@ -121,7 +128,7 @@ export async function startRun(opts: StartRunOptions): Promise<registry.AgentRec
     },
 
     onMessage: async (text) => {
-      registry.broadcast(id, { type: "agent_message", text });
+      registry.broadcast(id, { type: "agent_message", text, ts: Date.now() });
     },
 
     onTurnComplete: (result: TurnResult) => {
@@ -142,6 +149,8 @@ export async function startRun(opts: StartRunOptions): Promise<registry.AgentRec
         startedAt: rec.createdAt,
         totalCostUsd: rec.totalCostUsd,
       });
+
+      invalidateAISummary(id); // stale after each turn
 
       console.log(
         `[run:${id.slice(0, 8)}] Turn ${rec.turnCount} — $${rec.totalCostUsd.toFixed(2)}`
