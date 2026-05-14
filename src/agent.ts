@@ -33,6 +33,11 @@ export type AgentOptions = {
   checkReplies: () => Promise<string[]>;
   /** User-defined custom tools to register for this run. */
   customTools?: CustomTool[];
+  /**
+   * Additional sub-agent definitions merged on top of the built-in researcher/coder pair.
+   * Keys become the agent name; user-defined entries override defaults with the same name.
+   */
+  subAgents?: Record<string, { description: string; prompt: string; model?: string }>;
   onEvent: (event: SDKMessage) => void;
   onMessage: (text: string) => Promise<void>;
   onTurnComplete: (result: TurnResult) => void;
@@ -281,6 +286,8 @@ export function createAgent(opts: AgentOptions): AgentHandle {
           prompt: "You are a coding agent. Follow existing patterns. Run type-checks after changes.",
           model: "sonnet",
         },
+        // User-defined sub-agents override defaults with the same name
+        ...(opts.subAgents ?? {}),
       },
     },
   });

@@ -1,46 +1,19 @@
 """
-High-level Agent / Task / Run API for Mobius.
+Agent, Task, and Run — the core building blocks of Mobius.
 
-Usage:
-    from mobius import Agent, Task
-    from mobius.tools import HttpTool, ShellTool
-    from mobius.models import SONNET, OPUS
+Agent   owns the definition: capabilities, tools, constraints.
+Task    owns the goal: what to accomplish and how to know when it's done.
+Run     owns a live execution: stream events, steer, stop, read results.
 
-    agent = Agent(
-        name="builder",
-        models=[SONNET, OPUS],
-        tools=[
-            HttpTool(name="search_db", description="...", url="http://localhost:8080/search"),
-            ShellTool(name="run_tests", description="...", command="pytest {{pattern}}"),
-        ],
-        max_cost=5.0,
-        max_steps=100,
-    )
-
-    task = Task(
-        goal="Build a CLI todo app with tests",
-        success_criteria=["all tests pass", "README explains usage"],
-    )
-
-    run = agent.run(task)
-
-    import asyncio
-    async def watch():
-        async for event in run.stream():
-            if event.type == "agent_message":
-                print(event.data["text"])
-    asyncio.run(watch())
-
-    run.send("Use Click, not argparse")
-    print(run.result())
-    run.stop()
+Execution is separated into Runtime (see runtime.py).
+Convenience methods like agent.run() delegate to a default Runtime internally.
 """
 
 import os
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 from .client import MobiusClient
-from .models import AgentEvent
+from .models import Agent as _AgentModel, AgentEvent
 from .tools import Tool
 
 # ── Model name constants ──────────────────────────────────────────────────────
@@ -54,12 +27,12 @@ OPUS   = "claude-opus-4-7"
 
 class Task:
     """
-    Describes what an agent should accomplish.
+    What an agent should accomplish.
 
     Args:
-        goal:               The primary objective in plain language.
-        context:            Optional background the agent should know.
-        success_criteria:   Optional checklist the agent should satisfy before stopping.
+        goal:              The primary objective in plain language.
+        context:           Optional background the agent should know upfront.
+        success_criteria:  Checklist the agent should satisfy before finishing.
     """
 
     def __init__(
@@ -77,7 +50,7 @@ class Task:
         if self.context:
             parts += ["", "Context:", self.context]
         if self.success_criteria:
-            parts += ["", "Success criteria (all must be met before you finish):"]
+            parts += ["", "Success criteria (all must be met before finishing):"]
             parts += [f"  - {c}" for c in self.success_criteria]
         return "\n".join(parts)
 
@@ -86,9 +59,10 @@ class Task:
 
 class Run:
     """
-    A live agent run returned by Agent.run(task).
+    A live (or completed) agent run.
 
-    All methods that hit the server are synchronous except stream(), which is async.
+    Returned by Runtime.run(), agent.run(), or swarm.run().
+    All state-reading properties hit the server on each call.
     """
 
     def __init__(self, agent_id: str, client: MobiusClient) -> None:
@@ -99,17 +73,17 @@ class Run:
 
     @property
     def id(self) -> str:
-        """The agent's UUID on the server."""
+        """The run's UUID on the server."""
         return self._id
 
     @property
     def status(self) -> str:
-        """Current status: starting | running | stopped | error."""
+        """starting | running | stopped | error"""
         return self._client.get_agent(self._id).status
 
     @property
     def cost(self) -> float:
-        """Cumulative API cost in USD so far."""
+        """Cumulative API cost in USD."""
         return self._client.get_agent(self._id).total_cost_usd
 
     @property
@@ -119,23 +93,23 @@ class Run:
 
     @property
     def workspace(self) -> str:
-        """Absolute path to the agent's working directory on the server."""
+        """Absolute path to the agent's working directory."""
         return self._client.get_agent(self._id).workspace_path
 
     # ── Control ───────────────────────────────────────────────────────────────
 
     def send(self, message: str) -> None:
-        """Inject a message into the agent's conversation mid-run."""
+        """Inject a message into the agent's conversation."""
         self._client.send_message(self._id, message)
 
     def stop(self) -> None:
-        """Halt the agent immediately."""
+        """Halt the agent. State is preserved — use Runtime.resume() to continue."""
         self._client.stop_agent(self._id)
 
     # ── Results ───────────────────────────────────────────────────────────────
 
     def result(self) -> Dict[str, Any]:
-        """Return the current run snapshot (non-blocking)."""
+        """Current run snapshot."""
         a = self._client.get_agent(self._id)
         return {
             "id": a.id,
@@ -146,7 +120,7 @@ class Run:
         }
 
     def analytics(self) -> Dict[str, Any]:
-        """Turn-by-turn breakdown of tool usage, phases, and costs."""
+        """Turn-by-turn tool usage and phase breakdown."""
         return self._client.get_analytics(self._id)
 
     def summary(self) -> Dict[str, Any]:
@@ -161,7 +135,7 @@ class Run:
 
     async def stream(self) -> AsyncGenerator[AgentEvent, None]:
         """
-        Async generator — yields live AgentEvent objects until disconnected.
+        Async generator — yields live AgentEvent objects.
 
         Usage:
             import asyncio
@@ -170,36 +144,39 @@ class Run:
                 async for event in run.stream():
                     if event.type == "agent_message":
                         print(event.data["text"])
+                    elif event.type == "ping":
+                        run.send("Yes, proceed.")
                     elif event.type == "turn_complete":
                         print(f"Turn {event.data['turns']} — ${event.data['cost']:.4f}")
-                    elif event.type == "ping":
-                        run.send("Yes, proceed with that approach")
 
             asyncio.run(watch())
         """
         async for event in self._client.stream(self._id):
             yield event
 
+    def __repr__(self) -> str:
+        return f"Run(id={self._id[:8]}…)"
+
 
 # ── Agent ─────────────────────────────────────────────────────────────────────
 
 class Agent:
     """
-    Define a long-horizon agent.
+    The agent definition — its identity, capabilities, and operating constraints.
 
-    The agent is not started until you call run(task).
-    Tools are synced to the server automatically when run() is called.
+    Agent owns the what and the how.
+    Runtime (see runtime.py) owns execution.
+
+    Convenience methods (run, spawn, resume, inspect) delegate to a default
+    Runtime so you don't have to instantiate one explicitly for simple cases.
 
     Args:
-        name:       Display name (prepended to the task for context).
-        models:     Allowed model names, e.g. [SONNET, OPUS].
-                    The server picks the active model via CLAUDE_MODEL env var;
-                    this list is recorded with the task for transparency.
-        tools:      HttpTool / ShellTool instances to register for this agent.
-        max_cost:   Optional USD budget ceiling (injected as a constraint in the task).
-        max_steps:  Optional turn limit (injected as a constraint in the task).
-        server:     Mobius server URL. Defaults to MOBIUS_SERVER env var or
-                    http://localhost:3000.
+        name:      Display name, prepended to the task for context.
+        models:    Allowed model names (informational; server uses CLAUDE_MODEL env var).
+        tools:     HttpTool / ShellTool instances synced to the server on run().
+        max_cost:  Optional USD budget constraint injected into the task prompt.
+        max_steps: Optional turn limit injected into the task prompt.
+        server:    Mobius server URL. Defaults to MOBIUS_SERVER or localhost:3000.
     """
 
     def __init__(
@@ -219,38 +196,64 @@ class Agent:
         self._server = server or os.environ.get("MOBIUS_SERVER", "http://localhost:3000")
         self._client = MobiusClient(base_url=self._server)
 
-    def run(self, task: Task) -> Run:
-        """
-        Sync tools to the server, then start the agent.
-        Returns a Run handle immediately — the agent runs in the background.
-        """
-        self._sync_tools()
+    # ── High-level entry points ───────────────────────────────────────────────
 
+    def run(self, task: Union[str, "Task"]) -> "Run":
+        """
+        Start a new agent run for the given task.
+        Convenience wrapper around Runtime.run(agent, task).
+        """
+        from .runtime import Runtime
+        return Runtime(server=self._server).run(self, task)
+
+    def spawn(self, task: Union[str, "Task"]) -> "Run":
+        """
+        Spawn a focused sub-run from this agent definition.
+        Identical to run() — use when semantically spawning a sub-task.
+        """
+        return self.run(task)
+
+    def resume(self, run_id: str) -> "Run":
+        """
+        Resume a previously stopped run from its last checkpoint.
+        The original workspace and turn history are preserved.
+        """
+        from .runtime import Runtime
+        return Runtime(server=self._server).resume(run_id)
+
+    def inspect(self, run_id: str) -> Dict[str, Any]:
+        """Return a state snapshot for any run by ID."""
+        return Run(run_id, self._client).result()
+
+    # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _build_task_prompt(self, task: Union[str, "Task"]) -> str:
+        goal = task if isinstance(task, str) else task._to_prompt()
         parts = [f"[Agent: {self.name}]"]
         if len(self.models) == 1:
             parts.append(f"[Model: {self.models[0]}]")
-        parts.append("")
-        parts.append(task._to_prompt())
+        parts += ["", goal]
         if self.max_cost is not None:
             parts.append(f"\nBudget: stop before exceeding ${self.max_cost:.2f} in API costs.")
         if self.max_steps is not None:
             parts.append(f"Step limit: complete within {self.max_steps} turns.")
-
-        model = self._client.create_agent("\n".join(parts))
-        return Run(model.id, self._client)
-
-    # ── Internal ──────────────────────────────────────────────────────────────
+        return "\n".join(parts)
 
     def _sync_tools(self) -> None:
-        """Create or update each tool on the server before starting the run."""
         if not self.tools:
             return
-
         existing = {t.name: t for t in self._client.list_tools()}
-
         for tool in self.tools:
             body = tool._to_dict()
-            if body["name"] in existing:
-                self._client._req("PUT", f"/api/tools/{existing[body['name']].id}", json=body)
+            name = body["name"]
+            if name in existing:
+                self._client._req("PUT", f"/api/tools/{existing[name].id}", json=body)
             else:
                 self._client._req("POST", "/api/tools", json=body)
+
+    def _sub_agents_dict(self) -> Optional[Dict[str, Any]]:
+        """Subclasses (e.g. Swarm) override this to inject sub-agent definitions."""
+        return None
+
+    def __repr__(self) -> str:
+        return f"Agent(name={self.name!r}, models={self.models})"

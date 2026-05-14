@@ -61,16 +61,24 @@ function broadcastSDKEvent(agentId: string, event: SDKMessage): void {
 export type StartRunOptions = {
   /** Optional task description shown in the UI and injected into initial message. */
   task?: string;
+  /** Optional sub-agent definitions for swarm runs. */
+  subAgents?: Record<string, { description: string; prompt: string; model?: string }>;
+  /**
+   * Resume a previously stopped run.
+   * If provided, this exact ID is reused so the existing workspace and state.json
+   * are picked up automatically — the agent resumes from its last checkpoint.
+   */
+  resumeId?: string;
 };
 
 /**
- * Spawn a new isolated agent run.
+ * Spawn a new isolated agent run (or resume an existing one via resumeId).
  * - Creates `.agents/<id>/workspace/` (git init'd) and `.agents/<id>/state.json`
  * - Registers the run in the global registry
  * - Returns immediately; agent runs asynchronously in the background
  */
 export async function startRun(opts: StartRunOptions): Promise<registry.AgentRecord> {
-  const id = crypto.randomUUID();
+  const id = opts.resumeId ?? crypto.randomUUID();
   const task = opts.task?.trim() || "No specific task provided — ask the human what they need.";
 
   const storage = createAgentStorage(id);
@@ -114,6 +122,7 @@ export async function startRun(opts: StartRunOptions): Promise<registry.AgentRec
     initialMessage,
     previousState,
     customTools,
+    subAgents: opts.subAgents,
 
     pingHuman: async (message) => {
       registry.broadcast(id, { type: "ping", message, ts: Date.now() });

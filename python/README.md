@@ -1,81 +1,245 @@
 # mobius-agents — Python SDK
 
-Python SDK for defining and running long-horizon Mobius agents from code.
-
-> **Requires the Mobius server to be running.**
-> Start it with `bun run agent` from the project root.
-> Set `MOBIUS_SERVER=http://...` to point at a remote instance.
-
----
-
-## Installation
+> **Requires the Mobius server running.**
+> Start it: `bun run agent` from the project root.
+> Override server: `MOBIUS_SERVER=http://...`
 
 ```bash
-cd python
-pip install -e .
+cd python && pip install -e .
 ```
 
 ---
 
-## Quickstart
+## Concepts
 
-```python
-from mobius import Agent, Task, SONNET
-
-agent = Agent(
-    name="researcher",
-    models=[SONNET],
-)
-
-task = Task(goal="Summarise the top 5 Python web frameworks")
-
-run = agent.run(task)
-print(run.id, run.status)
-```
+| Class | Owns |
+|---|---|
+| `Agent` | Definition — name, models, tools, constraints |
+| `Task` | Goal — what to accomplish, success criteria |
+| `Run` | A live execution — stream, steer, stop, read results |
+| `Runtime` | Execution — start, pause, resume, replay, list runs |
+| `Swarm` | A multi-agent team (subclass of Agent) |
+| `SubAgent` | One role within a Swarm |
 
 ---
 
-## Defining an agent
+## Agent
 
 ```python
-from mobius import Agent, SONNET, OPUS
+from mobius import Agent, Task, SONNET, OPUS
 from mobius.tools import HttpTool, ShellTool
 
 agent = Agent(
     name="builder",
-
-    # Allowed models — informational; server picks the active model via CLAUDE_MODEL env var.
-    # Listed here so the task prompt reflects the intended capability tier.
-    models=[SONNET, OPUS],
-
-    # Custom tools the agent can call (synced to the server on run())
+    models=[SONNET, OPUS],          # informational; server uses CLAUDE_MODEL env var
     tools=[
         HttpTool(
             name="search_db",
-            description="Search the internal product database. Use when asked about products or inventory.",
+            description="Search the internal database. Use when asked about products.",
             url="http://localhost:8080/search",
-            method="POST",
-            params={
-                "query": ("string", "Search query",  True),
-                "limit": ("number", "Max results",   False),
-            },
+            params={"query": ("string", "Search query", True)},
         ),
         ShellTool(
             name="run_tests",
-            description="Run the test suite before committing code changes.",
+            description="Run the test suite before committing.",
             command="pytest {{pattern}} -v",
-            params={
-                "pattern": ("string", "Test file pattern or path", False),
-            },
         ),
     ],
-
-    max_cost=5.00,   # optional USD budget — injected as a constraint in the task prompt
-    max_steps=100,   # optional turn limit  — same
+    max_cost=5.0,    # optional USD budget constraint
+    max_steps=100,   # optional turn limit
 )
 ```
 
-### Model constants
+### Agent methods
+
+```python
+run   = agent.run("Build a CLI todo app")        # start a fresh run
+sub   = agent.spawn("Write tests for auth.py")   # spawn a focused sub-task
+run2  = agent.resume(run.id)                     # continue from last checkpoint
+state = agent.inspect(run.id)                    # snapshot dict by run ID
+```
+
+---
+
+## Runtime
+
+`Runtime` owns execution. Use it when you want explicit control or to manage multiple runs.
+
+```python
+from mobius import Agent, Task, Runtime, SONNET
+
+agent   = Agent(name="researcher", models=[SONNET])
+runtime = Runtime()                             # or Runtime("http://remote:3000")
+
+run  = runtime.run(agent, Task("Research ML frameworks"))
+runtime.pause(run.id)                           # stop, preserve state + workspace
+run2 = runtime.resume(run.id)                   # continue from last checkpoint
+run3 = runtime.replay(run.id)                   # same task, clean slate
+run4 = runtime.get(run.id)                      # get handle to any existing run
+runs = runtime.list()                           # all runs as Run objects
+details = runtime.list_details()                # all runs as plain dicts
+```
+
+`agent.run(task)` is shorthand for `Runtime().run(agent, task)`.
+
+---
+
+## Task
+
+```python
+from mobius import Task
+
+task = Task(
+    goal="Build a CLI todo app in Python",
+    context="Use Click. Store todos in SQLite.",          # optional
+    success_criteria=[                                    # optional
+        "all tests pass",
+        "README explains install and usage",
+        "pip install -e . works",
+    ],
+)
+```
+
+---
+
+## Run
+
+```python
+run.id        # UUID
+run.status    # "starting" | "running" | "stopped" | "error"
+run.cost      # cumulative USD
+run.turns     # completed turns
+run.workspace # abs path to working directory on the server
+
+run.send("Focus on Python 3.12+")   # steer mid-run
+run.stop()                           # halt (state preserved)
+
+run.result()     # → {"id", "status", "turns", "cost_usd", "workspace"}
+run.analytics()  # → turn-by-turn tool breakdown
+run.summary()    # → AI-written narrative (needs OPENROUTER_API_KEY)
+run.invalidate_summary()
+```
+
+### Streaming
+
+```python
+import asyncio
+
+async def watch(run):
+    async for event in run.stream():
+        t = event.type
+        if t == "thinking":
+            print("◌")
+        elif t == "tool_use":
+            print(f"⚙  {event.data['name']}")
+        elif t == "agent_message":
+            print(f"\nAgent: {event.data['text']}\n")
+        elif t == "ping":
+            print(f"⚡ {event.data['message']}")
+            run.send("Yes, proceed.")
+        elif t == "turn_complete":
+            d = event.data
+            print(f"✓ Turn {d['turns']}  ${d['cost']:.4f}  {d['duration_ms']/1000:.1f}s")
+
+asyncio.run(watch(run))
+```
+
+**Event types:** `thinking` · `tool_use` · `tool_result` · `agent_message` · `turn_complete` · `ping` · `user_message` · `status`
+
+---
+
+## Swarm
+
+Coordinate specialised sub-agents under one orchestrator.
+All agents share a workspace. Shared state lives in `.swarm/memory.md` —
+each agent reads it before starting and appends findings when done.
+
+```python
+from mobius import Swarm, Runtime
+from mobius.swarm import SubAgent
+
+swarm = Swarm(
+    agents=[
+        SubAgent("planner", role="Break work into milestones with acceptance criteria"),
+        SubAgent("coder",   role="Implement each milestone as clean, tested code"),
+        SubAgent("critic",  role="Review code, run tests, report issues"),
+    ],
+    max_cost=10.0,
+    context="Stack: Python + Click + SQLite. Tests: pytest.",  # optional shared context
+)
+
+# Simple
+run = swarm.run("Build a CLI todo app with full test coverage")
+
+# With explicit runtime
+runtime = Runtime()
+run = runtime.run(swarm, "Build a CLI todo app…")
+runtime.pause(run.id)
+run2 = runtime.resume(run.id)
+```
+
+### SubAgent
+
+```python
+SubAgent(
+    name="analyzer",                       # snake_case, used by orchestrator to call it
+    role="Analyse code for security issues",  # shown to orchestrator
+    system_prompt="...",                   # optional — auto-generated from role if omitted
+    model="sonnet",                        # "sonnet" | "opus" | "haiku"
+)
+```
+
+### How shared memory works
+
+The orchestrator is instructed to maintain `.swarm/memory.md` in its workspace.
+
+| When | What happens |
+|---|---|
+| Swarm starts | Orchestrator creates `.swarm/memory.md` with goal + context |
+| Before each agent call | Orchestrator writes a delegation block to memory |
+| Sub-agent runs | Reads memory for context, appends results when done |
+| Orchestrator decides next step | Reads accumulated memory, not just last result |
+
+Sub-agents' system prompts include these instructions automatically. You can override them per-agent with a custom `system_prompt`.
+
+---
+
+## Tools
+
+```python
+from mobius.tools import HttpTool, ShellTool
+
+# HTTP — POST input as JSON, receive response as text
+HttpTool(
+    name="notify_slack",
+    description="Send a message to the #builds Slack channel.",
+    url="https://hooks.slack.com/...",
+    method="POST",
+    headers={"Content-Type": "application/json"},
+    params={"text": ("string", "Message to send", True)},
+)
+
+# Shell — substitute {{param}} tokens, run via sh -c
+ShellTool(
+    name="deploy",
+    description="Deploy to staging. Run after tests pass.",
+    command="./scripts/deploy.sh --env {{env}} --tag {{tag}}",
+    cwd="/path/to/project",
+    timeout_ms=120_000,
+    params={
+        "env": ("string", "Target environment",  True),
+        "tag": ("string", "Git tag to deploy",   True),
+    },
+)
+```
+
+Param tuple: `(type, description, required)` — type is `"string"` `"number"` `"integer"` `"boolean"` `"array"`.
+
+Tools are synced to the server when `run()` is called. Manage them in the web UI at `/tools` or via `bun run cli tools:list`.
+
+---
+
+## Model constants
 
 ```python
 from mobius import SONNET, HAIKU, OPUS
@@ -87,236 +251,47 @@ OPUS    # "claude-opus-4-7"
 
 ---
 
-## Defining a task
-
-```python
-from mobius import Task
-
-task = Task(
-    goal="Build a CLI todo app in Python with full test coverage",
-
-    context="Use Click for the CLI. Store todos in a local SQLite database.",  # optional
-
-    success_criteria=[           # optional — agent is told to satisfy all before finishing
-        "all tests pass",
-        "README explains install and usage",
-        "package installs with pip install -e .",
-    ],
-)
-```
-
----
-
-## Starting a run
-
-`agent.run(task)` syncs any tool definitions to the server, then starts the agent.
-It returns immediately — the agent runs in the background.
-
-```python
-run = agent.run(task)
-
-print(run.id)        # UUID
-print(run.status)    # "starting" → "running"
-print(run.cost)      # cumulative USD so far
-print(run.turns)     # completed turns
-print(run.workspace) # absolute path to agent's working directory on the server
-```
-
----
-
-## Streaming live events
-
-```python
-import asyncio
-from mobius import Agent, Task, SONNET
-
-agent = Agent(name="coder", models=[SONNET])
-run = agent.run(Task(goal="Write a Fibonacci function and test it"))
-
-async def watch():
-    async for event in run.stream():
-        t = event.type
-
-        if t == "thinking":
-            print("◌ thinking...")
-        elif t == "tool_use":
-            print(f"⚙  {event.data['name']}  {event.data['input']}")
-        elif t == "tool_result":
-            print(f"   → {event.data['summary']}")
-        elif t == "agent_message":
-            print(f"\nAgent: {event.data['text']}\n")
-        elif t == "ping":
-            print(f"\n⚡ Agent asks: {event.data['message']}")
-            run.send("Yes, go ahead.")           # reply inside the loop
-        elif t == "turn_complete":
-            d = event.data
-            print(f"✓ Turn {d['turns']}  cost=${d['cost']:.4f}  {d['duration_ms']/1000:.1f}s")
-
-asyncio.run(watch())
-```
-
-### All event types
-
-| `event.type` | When | Key fields in `event.data` |
-|---|---|---|
-| `thinking` | Agent is reasoning | — |
-| `tool_use` | Tool called | `name`, `input` |
-| `tool_result` | Tool returned | `summary` |
-| `agent_message` | Agent produced text | `text` |
-| `turn_complete` | Turn finished | `cost`, `turns`, `duration_ms`, `stop_reason` |
-| `ping` | Agent asks a question | `message` |
-| `user_message` | Message injected | `text` |
-| `status` | Agent stopping | `text` |
-
----
-
-## Controlling a run
-
-```python
-# Steer the agent mid-run
-run.send("Focus on Python 3.12+, ignore older versions")
-
-# Stop immediately
-run.stop()
-```
-
----
-
-## Reading results
-
-```python
-# Non-blocking snapshot
-r = run.result()
-# {
-#   "id": "...",
-#   "status": "running",
-#   "turns": 14,
-#   "cost_usd": 0.0312,
-#   "workspace": "/path/to/.agents/{id}/workspace"
-# }
-
-# Turn-by-turn tool breakdown
-analytics = run.analytics()
-
-# AI-written narrative summary (requires OPENROUTER_API_KEY on the server)
-summary = run.summary()
-# summary["state"]                  → "ready" | "generating" | "error"
-# summary["summary"]["overall"]     → one sentence
-# summary["summary"]["phases"]      → list of phase summaries
-
-run.invalidate_summary()  # force regeneration
-```
-
----
-
-## Tools
-
-### HttpTool
-
-Calls an HTTP endpoint when invoked. Input params → JSON body (POST/PUT/PATCH) or query string (GET). Response body returned to agent as text.
-
-```python
-HttpTool(
-    name="get_weather",
-    description="Get current weather for a city. Use when the task involves location-based decisions.",
-    url="http://api.weather.internal/current",
-    method="GET",
-    headers={"X-API-Key": "secret"},  # optional
-    params={
-        "city": ("string", "City name", True),
-    },
-)
-```
-
-### ShellTool
-
-Runs a local shell command. Use `{{param_name}}` for substitution — values are shell-quoted before insertion.
-
-```python
-ShellTool(
-    name="deploy",
-    description="Deploy the app to the staging environment.",
-    command="./scripts/deploy.sh --env {{env}} --tag {{tag}}",
-    cwd="/path/to/project",  # optional, defaults to agent workspace
-    timeout_ms=120_000,      # optional, default 30 000
-    params={
-        "env": ("string", "Target environment (staging|prod)", True),
-        "tag": ("string", "Git tag or branch to deploy",       True),
-    },
-)
-```
-
-### Param tuple format
-
-```
-(type, description, required)
-```
-
-| `type` | Python equivalent |
-|---|---|
-| `"string"` | `str` |
-| `"number"` | `float` |
-| `"integer"` | `int` |
-| `"boolean"` | `bool` |
-| `"array"` | `list` |
-
-Tools are synced to the server when `agent.run()` is called. If a tool with the same name already exists it is updated in place. Tools persist across runs — you can manage them in the web UI (`/tools`) or via the CLI (`bun run cli tools:list`).
-
----
-
-## Low-level client
-
-`MobiusClient` is still available for direct API access when you need it:
-
-```python
-from mobius import MobiusClient
-
-client = MobiusClient()                           # http://localhost:3000
-client = MobiusClient("http://remote-host:3000")
-
-# Direct agent management
-agents = client.list_agents()
-client.send_message(agent_id, "message")
-client.stop_agent(agent_id)
-
-# Config
-client.set_config(ANTHROPIC_API_KEY="sk-ant-...")
-cfg = client.get_config()  # ConfigStatus — never exposes key values
-
-# Tools
-tools = client.list_tools()
-client.toggle_tool(tool_id)
-client.delete_tool(tool_id)
-```
-
----
-
 ## Exceptions
 
 ```python
-from mobius import ServerNotRunningError, AgentNotFoundError, MobiusError
+from mobius import ServerNotRunningError, AgentNotFoundError
 
 try:
     run = agent.run(task)
 except ServerNotRunningError:
     print("Start the server: bun run agent")
-except MobiusError as e:
-    print("Error:", e)
+except AgentNotFoundError:
+    print("Run ID not found")
 ```
 
 ---
 
-## Extending the package
+## Low-level client
+
+`MobiusClient` is still available for direct API access:
+
+```python
+from mobius import MobiusClient
+
+client = MobiusClient()
+agents = client.list_agents()
+client.set_config(ANTHROPIC_API_KEY="sk-ant-...")
+tools  = client.list_tools()
+```
+
+---
+
+## Package layout
 
 ```
-python/
-  mobius/
-    __init__.py   public exports
-    agent.py      Agent, Task, Run — high-level API
-    tools.py      HttpTool, ShellTool — tool definitions
-    client.py     MobiusClient — raw HTTP wrapper
-    models.py     dataclasses for API responses
-    streaming.py  WebSocket event generator
-    exceptions.py error types
-  pyproject.toml  bump version here when releasing
+python/mobius/
+  __init__.py    exports
+  agent.py       Agent, Task, Run + model constants
+  runtime.py     Runtime
+  swarm.py       Swarm, SubAgent
+  tools.py       HttpTool, ShellTool
+  client.py      MobiusClient (HTTP wrapper)
+  models.py      dataclasses for API responses
+  streaming.py   WebSocket async generator
+  exceptions.py  error types
 ```

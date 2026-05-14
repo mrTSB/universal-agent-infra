@@ -145,6 +145,27 @@ export function startAPIServer(): void {
         return json({ invalidated: true });
       }
 
+      // Resume a stopped agent (reuses its workspace + last state.json checkpoint)
+      const resumeMatch = pathname.match(/^\/api\/agents\/([^/]+)\/resume$/);
+      if (resumeMatch && method === "POST") {
+        const agentId = resumeMatch[1];
+        const stopped = registry.get(agentId);
+        if (!stopped) return json({ error: "Not found" }, 404);
+        if (stopped.status === "running") return json({ error: "Agent is already running" }, 400);
+        const record = await startRun({ task: stopped.task, resumeId: agentId });
+        return json({ id: record.id, status: record.status, resumed: true });
+      }
+
+      // Replay a run — same task but fresh workspace and state
+      const replayMatch = pathname.match(/^\/api\/agents\/([^/]+)\/replay$/);
+      if (replayMatch && method === "POST") {
+        const agentId = replayMatch[1];
+        const original = registry.get(agentId);
+        if (!original) return json({ error: "Not found" }, 404);
+        const record = await startRun({ task: original.task });
+        return json({ id: record.id, status: record.status, replayed: true, originalId: agentId });
+      }
+
       const apiAgentMatch = pathname.match(/^\/api\/agents\/([^/]+)$/);
       if (apiAgentMatch) {
         const agentId = apiAgentMatch[1];
@@ -260,12 +281,17 @@ async function handleCreateAgent(req: Request): Promise<Response> {
   }
 
   let task: string | undefined;
+  let subAgents: Record<string, { description: string; prompt: string; model?: string }> | undefined;
   try {
-    const body = (await req.json()) as { task?: string };
+    const body = (await req.json()) as {
+      task?: string;
+      subAgents?: Record<string, { description: string; prompt: string; model?: string }>;
+    };
     task = body.task?.trim() || undefined;
+    subAgents = body.subAgents;
   } catch { /* body is optional */ }
 
-  const record = await startRun({ task });
+  const record = await startRun({ task, subAgents });
 
   return json(
     {

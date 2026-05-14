@@ -1,4 +1,6 @@
 from .agent import Agent, Task, Run, SONNET, HAIKU, OPUS
+from .runtime import Runtime
+from .swarm import Swarm
 from .client import MobiusClient
 from .exceptions import AgentNotFoundError, MobiusError, ServerNotRunningError
 from .models import AgentEvent, ConfigStatus, CustomTool, ToolInputSchema, JsonSchemaProperty
@@ -6,15 +8,17 @@ from .models import AgentEvent, ConfigStatus, CustomTool, ToolInputSchema, JsonS
 __version__ = "0.1.0"
 
 __all__ = [
-    # High-level API
+    # Core API
     "Agent",
     "Task",
     "Run",
+    "Runtime",
+    "Swarm",
     # Model constants
     "SONNET",
     "HAIKU",
     "OPUS",
-    # Low-level client (for direct API access)
+    # Low-level client
     "MobiusClient",
     # Models
     "AgentEvent",
