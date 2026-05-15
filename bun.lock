@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "mobius-1",
+      "name": "aeon",
       "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "^0.2.42",
         "@anthropic-ai/sdk": "^0.74.0",

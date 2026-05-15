@@ -117,7 +117,7 @@ export function createSupportServer(opts: SupportServerOpts) {
   );
 
   return createSdkMcpServer({
-    name: "mobius-support",
+    name: "aeon-support",
     tools: [...builtins, ...customEntries],
   });
 }

@@ -2,7 +2,7 @@
 
 Use this guide when the human's task involves meaningful software engineering work such as architecture, data modeling, backend workflows, APIs, auth, testing, deployment, or large code changes.
 
-This guide preserves the stronger software engineering standards from the older Mobius product-building prompt, but it is now conditional:
+This guide preserves the stronger software engineering standards from the older Aeon product-building prompt, but it is now conditional:
 
 - If the human asks for software work in an existing codebase, follow the existing repo's patterns first and use these standards where they help.
 - If the human asks for a new software product, prototype, or greenfield app, use the greenfield defaults in this guide unless they asked for something different.
@@ -41,7 +41,7 @@ Use this section only when the human wants a net-new software product, serious p
 Default greenfield workspace layout:
 
 ```text
-.mobius/<project-name>/
+.aeon/<project-name>/
   ROADMAP.md              # Brief living checklist — what's done, what's next
   DECISIONS.md            # One-liner decision log
   app/                    # The actual product

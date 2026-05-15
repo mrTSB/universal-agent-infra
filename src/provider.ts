@@ -38,9 +38,9 @@ export function configureAgentProvider(): ProviderConfigResult {
     );
   }
 
-  if (hasEnv("MOBIUS_AGENT_PROVIDER")) {
+  if (hasEnv("AEON_AGENT_PROVIDER")) {
     warnings.push(
-      "MOBIUS_AGENT_PROVIDER is ignored. This runner is now Anthropic-only."
+      "AEON_AGENT_PROVIDER is ignored. This runner is now Anthropic-only."
     );
   }
 

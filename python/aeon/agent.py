@@ -1,5 +1,5 @@
 """
-Agent, Task, and Run — the core building blocks of Mobius.
+Agent, Task, and Run — the core building blocks of Aeon.
 
 Agent   owns the definition: capabilities, tools, constraints.
 Task    owns the goal: what to accomplish and how to know when it's done.
@@ -12,7 +12,7 @@ Convenience methods like agent.run() delegate to a default Runtime internally.
 import os
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
-from .client import MobiusClient
+from .client import AeonClient
 from .models import Agent as _AgentModel, AgentEvent
 from .tools import Tool
 
@@ -65,7 +65,7 @@ class Run:
     All state-reading properties hit the server on each call.
     """
 
-    def __init__(self, agent_id: str, client: MobiusClient) -> None:
+    def __init__(self, agent_id: str, client: AeonClient) -> None:
         self._id = agent_id
         self._client = client
 
@@ -224,7 +224,7 @@ class Agent:
         tools:     HttpTool / ShellTool instances synced to the server on run().
         max_cost:  Optional USD budget constraint injected into the task prompt.
         max_steps: Optional turn limit injected into the task prompt.
-        server:    Mobius server URL. Defaults to MOBIUS_SERVER or localhost:3000.
+        server:    Aeon server URL. Defaults to AEON_SERVER or localhost:3000.
     """
 
     def __init__(
@@ -241,8 +241,8 @@ class Agent:
         self.tools = tools or []
         self.max_cost = max_cost
         self.max_steps = max_steps
-        self._server = server or os.environ.get("MOBIUS_SERVER", "http://localhost:3000")
-        self._client = MobiusClient(base_url=self._server)
+        self._server = server or os.environ.get("AEON_SERVER", "http://localhost:3000")
+        self._client = AeonClient(base_url=self._server)
 
     # ── High-level entry points ───────────────────────────────────────────────
 

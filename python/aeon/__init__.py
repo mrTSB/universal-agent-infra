@@ -1,8 +1,8 @@
 from .agent import Agent, Task, Run, SONNET, HAIKU, OPUS
 from .runtime import Runtime
 from .swarm import Swarm
-from .client import MobiusClient
-from .exceptions import AgentNotFoundError, MobiusError, ServerNotRunningError
+from .client import AeonClient
+from .exceptions import AgentNotFoundError, AeonError, ServerNotRunningError
 from .models import AgentEvent, ConfigStatus, CustomTool, ToolInputSchema, JsonSchemaProperty
 
 __version__ = "0.1.0"
@@ -19,7 +19,7 @@ __all__ = [
     "HAIKU",
     "OPUS",
     # Low-level client
-    "MobiusClient",
+    "AeonClient",
     # Models
     "AgentEvent",
     "ConfigStatus",
@@ -27,7 +27,7 @@ __all__ = [
     "ToolInputSchema",
     "JsonSchemaProperty",
     # Exceptions
-    "MobiusError",
+    "AeonError",
     "ServerNotRunningError",
     "AgentNotFoundError",
 ]

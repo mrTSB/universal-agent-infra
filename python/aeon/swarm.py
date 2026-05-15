@@ -3,7 +3,7 @@ Swarm — coordinate a team of specialised sub-agents.
 
 A Swarm is an Agent with sub-agents attached.
 It inherits run(), spawn(), resume(), and inspect() from Agent.
-The orchestrator is started as a normal Mobius agent run; sub-agents
+The orchestrator is started as a normal Aeon agent run; sub-agents
 are registered with the Claude Agent SDK so the orchestrator can
 delegate to them as native tool calls.
 
@@ -12,8 +12,8 @@ Each sub-agent reads it before starting and appends its findings when done,
 giving the team a persistent, accumulated context across calls.
 
 Usage:
-    from mobius import Swarm, Runtime
-    from mobius.swarm import SubAgent
+    from aeon import Swarm, Runtime
+    from aeon.swarm import SubAgent
 
     swarm = Swarm(
         agents=[
@@ -28,7 +28,7 @@ Usage:
     run = swarm.run("Build a CLI todo app with SQLite storage and full test coverage")
 
     # Explicit — runtime owns execution
-    from mobius import Runtime
+    from aeon import Runtime
     runtime = Runtime()
     run = runtime.run(swarm, "Build a CLI todo app…")
     runtime.pause(run.id)
@@ -112,7 +112,7 @@ class Swarm(Agent):
         max_cost:  Optional USD budget constraint.
         max_steps: Optional orchestrator turn limit.
         context:   Optional background knowledge pre-loaded into shared memory.
-        server:    Mobius server URL.
+        server:    Aeon server URL.
     """
 
     def __init__(

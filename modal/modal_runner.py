@@ -11,8 +11,8 @@ from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-DEFAULT_APP_NAME = "mobius-runtime"
-DEFAULT_CACHE_VOLUME = "mobius-modal-cache"
+DEFAULT_APP_NAME = "aeon-runtime"
+DEFAULT_CACHE_VOLUME = "aeon-modal-cache"
 DEFAULT_CPU = 2.0
 DEFAULT_MEMORY_MB = 8192
 DEFAULT_TIMEOUT_SECONDS = 60 * 60 * 8

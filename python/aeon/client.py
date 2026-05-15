@@ -1,16 +1,16 @@
 import requests
 from typing import Any, Dict, List, Optional
 
-from .exceptions import AgentNotFoundError, MobiusError, ServerNotRunningError
+from .exceptions import AgentNotFoundError, AeonError, ServerNotRunningError
 from .models import Agent, AgentEvent, ConfigStatus, CustomTool, ToolInputSchema
 
 
-class MobiusClient:
+class AeonClient:
     """
-    Synchronous HTTP client for the Mobius agent infrastructure.
+    Synchronous HTTP client for the Aeon agent infrastructure.
 
     Usage:
-        client = MobiusClient()
+        client = AeonClient()
         agent = client.create_agent("Research AI trends in 2025")
         print(agent.id, agent.status)
 

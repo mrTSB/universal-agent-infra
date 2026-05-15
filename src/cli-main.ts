@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 // ---------------------------------------------------------------------------
-// Mobius CLI — manage agents and custom tools from the terminal
+// Aeon CLI — manage agents and custom tools from the terminal
 // Usage: bun run cli <command> [args]
 // ---------------------------------------------------------------------------
 
-const BASE = process.env["MOBIUS_SERVER"] ?? "http://localhost:3000";
+const BASE = process.env["AEON_SERVER"] ?? "http://localhost:3000";
 
 async function req(method: string, path: string, body?: unknown): Promise<unknown> {
   let res: Response;
@@ -15,7 +15,7 @@ async function req(method: string, path: string, body?: unknown): Promise<unknow
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {
-    die(`Cannot connect to Mobius server at ${BASE}.\nRun: bun run agent`);
+    die(`Cannot connect to Aeon server at ${BASE}.\nRun: bun run agent`);
   }
   const text = await res!.text();
   if (!res!.ok) {
@@ -298,8 +298,8 @@ const TOOL_SCHEMA_HINT = `
 
 function printHelp(): void {
   console.log(`
-${c(C.bold, "Mobius CLI")} — manage agents and tools
-${c(C.dim, "Set MOBIUS_SERVER=http://... to point at a remote instance")}
+${c(C.bold, "Aeon CLI")} — manage agents and tools
+${c(C.dim, "Set AEON_SERVER=http://... to point at a remote instance")}
 
 ${c(C.bold, "Agents")}
   ${c(C.cyan, "list")}                         List all agents

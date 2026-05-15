@@ -27,7 +27,7 @@ ENV/
 Thumbs.db
 
 # Agent workspace & state
-.mobius/
+.aeon/
 state.json
 state.json.tmp
 productpm/

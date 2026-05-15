@@ -1,8 +1,8 @@
-# mobius-agents — Python SDK
+# aeon-agents — Python SDK
 
-> **Requires the Mobius server running.**
+> **Requires the Aeon server running.**
 > Start it: `bun run agent` from the project root.
-> Override server: `MOBIUS_SERVER=http://...`
+> Override server: `AEON_SERVER=http://...`
 
 ```bash
 cd python && pip install -e .
@@ -26,8 +26,8 @@ cd python && pip install -e .
 ## Agent
 
 ```python
-from mobius import Agent, Task, SONNET, OPUS
-from mobius.tools import HttpTool, ShellTool
+from aeon import Agent, Task, SONNET, OPUS
+from aeon.tools import HttpTool, ShellTool
 
 agent = Agent(
     name="builder",
@@ -66,7 +66,7 @@ state = agent.inspect(run.id)                    # snapshot dict by run ID
 `Runtime` owns execution. Use it when you want explicit control or to manage multiple runs.
 
 ```python
-from mobius import Agent, Task, Runtime, SONNET
+from aeon import Agent, Task, Runtime, SONNET
 
 agent   = Agent(name="researcher", models=[SONNET])
 runtime = Runtime()                             # or Runtime("http://remote:3000")
@@ -87,7 +87,7 @@ details = runtime.list_details()                # all runs as plain dicts
 ## Task
 
 ```python
-from mobius import Task
+from aeon import Task
 
 task = Task(
     goal="Build a CLI todo app in Python",
@@ -155,8 +155,8 @@ All agents share a workspace. Shared state lives in `.swarm/memory.md` —
 each agent reads it before starting and appends findings when done.
 
 ```python
-from mobius import Swarm, Runtime
-from mobius.swarm import SubAgent
+from aeon import Swarm, Runtime
+from aeon.swarm import SubAgent
 
 swarm = Swarm(
     agents=[
@@ -207,7 +207,7 @@ Sub-agents' system prompts include these instructions automatically. You can ove
 ## Tools
 
 ```python
-from mobius.tools import HttpTool, ShellTool
+from aeon.tools import HttpTool, ShellTool
 
 # HTTP — POST input as JSON, receive response as text
 HttpTool(
@@ -242,7 +242,7 @@ Tools are synced to the server when `run()` is called. Manage them in the web UI
 ## Model constants
 
 ```python
-from mobius import SONNET, HAIKU, OPUS
+from aeon import SONNET, HAIKU, OPUS
 
 SONNET  # "claude-sonnet-4-6"
 HAIKU   # "claude-haiku-4-5"
@@ -254,7 +254,7 @@ OPUS    # "claude-opus-4-7"
 ## Exceptions
 
 ```python
-from mobius import ServerNotRunningError, AgentNotFoundError
+from aeon import ServerNotRunningError, AgentNotFoundError
 
 try:
     run = agent.run(task)
@@ -268,12 +268,12 @@ except AgentNotFoundError:
 
 ## Low-level client
 
-`MobiusClient` is still available for direct API access:
+`AeonClient` is still available for direct API access:
 
 ```python
-from mobius import MobiusClient
+from aeon import AeonClient
 
-client = MobiusClient()
+client = AeonClient()
 agents = client.list_agents()
 client.set_config(ANTHROPIC_API_KEY="sk-ant-...")
 tools  = client.list_tools()
@@ -284,13 +284,13 @@ tools  = client.list_tools()
 ## Package layout
 
 ```
-python/mobius/
+python/aeon/
   __init__.py    exports
   agent.py       Agent, Task, Run + model constants
   runtime.py     Runtime
   swarm.py       Swarm, SubAgent
   tools.py       HttpTool, ShellTool
-  client.py      MobiusClient (HTTP wrapper)
+  client.py      AeonClient (HTTP wrapper)
   models.py      dataclasses for API responses
   streaming.py   WebSocket async generator
   exceptions.py  error types

@@ -1,4 +1,4 @@
-# mobius-1
+# aeon
 
 Interactive autonomous CLI built on the Claude Agent SDK.
 

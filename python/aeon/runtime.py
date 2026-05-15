@@ -5,7 +5,7 @@ While Agent defines what an agent is,
 Runtime decides how and when it runs.
 
 Usage:
-    from mobius import Agent, Task, Runtime, SONNET
+    from aeon import Agent, Task, Runtime, SONNET
 
     agent = Agent(name="coder", models=[SONNET])
     task  = Task("Build a CLI todo app")
@@ -23,7 +23,7 @@ Usage:
 import os
 from typing import Any, Dict, List, Optional, Union
 
-from .client import MobiusClient
+from .client import AeonClient
 from .models import Agent as _AgentModel
 
 
@@ -32,15 +32,15 @@ class Runtime:
     Execution environment for agents and swarms.
 
     A single Runtime can manage many concurrent runs.
-    By default it connects to localhost:3000 (or MOBIUS_SERVER env var).
+    By default it connects to localhost:3000 (or AEON_SERVER env var).
 
     Args:
-        server: Mobius server URL.
+        server: Aeon server URL.
     """
 
     def __init__(self, server: Optional[str] = None) -> None:
-        self._server = server or os.environ.get("MOBIUS_SERVER", "http://localhost:3000")
-        self._client = MobiusClient(base_url=self._server)
+        self._server = server or os.environ.get("AEON_SERVER", "http://localhost:3000")
+        self._client = AeonClient(base_url=self._server)
 
     # ── Execution ─────────────────────────────────────────────────────────────
 

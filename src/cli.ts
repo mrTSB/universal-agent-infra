@@ -131,7 +131,7 @@ export function formatEvent(event: SDKMessage): void {
           ) as Record<string, unknown>;
           process.stdout.write(`${CYAN}   ${formatToolUse(block.name, input)}${RESET}\n`);
         } else if (block.type === "text" && block.text) {
-          process.stdout.write(`\n${BOLD}Mobius >${RESET} ${block.text}\n`);
+          process.stdout.write(`\n${BOLD}Aeon >${RESET} ${block.text}\n`);
         }
       }
       break;
@@ -146,7 +146,7 @@ export function formatEvent(event: SDKMessage): void {
       break;
     case "result":
       if (event.subtype === "success" && event.result) {
-        process.stdout.write(`\n${BOLD}Mobius >${RESET} ${event.result}\n`);
+        process.stdout.write(`\n${BOLD}Aeon >${RESET} ${event.result}\n`);
       }
       process.stdout.write(`\n${DIM}[autonomous — type to steer]${RESET} `);
       break;

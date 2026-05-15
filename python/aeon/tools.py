@@ -1,8 +1,8 @@
 """
-Tool definitions for Mobius agents.
+Tool definitions for Aeon agents.
 
 Usage:
-    from mobius.tools import HttpTool, ShellTool
+    from aeon.tools import HttpTool, ShellTool
 
     HttpTool(
         name="search_db",
