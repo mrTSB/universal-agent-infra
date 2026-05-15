@@ -131,6 +131,54 @@ class Run:
         """Force the AI summary to regenerate on next call."""
         self._client.invalidate_summary(self._id)
 
+    def artifacts(self) -> Dict[str, Any]:
+        """
+        List files created or modified in the agent's workspace.
+
+        Returns a dict with:
+          files           — list of {path, status, size_bytes}
+                            status: "new" | "modified" | "deleted" | "renamed"
+          total_files     — int
+          total_size_bytes — int
+          workspace       — absolute path on the server
+
+        Example:
+            arts = run.artifacts()
+            for f in arts["files"]:
+                print(f["status"], f["path"], f["size_bytes"])
+        """
+        return self._client._req("GET", f"/api/agents/{self._id}/artifacts").json()
+
+    def wait(
+        self,
+        timeout: Optional[float] = None,
+        poll_interval: float = 3.0,
+    ) -> Dict[str, Any]:
+        """
+        Block until the run reaches stopped or error status, then return result().
+
+        Args:
+            timeout:       Max seconds to wait. Raises TimeoutError if exceeded.
+            poll_interval: Seconds between status checks (default 3.0).
+
+        Example:
+            result = agent.run(task).wait(timeout=300)
+            print(result["cost_usd"])
+        """
+        import time
+        deadline = (time.monotonic() + timeout) if timeout is not None else None
+
+        while True:
+            status = self.status
+            if status in ("stopped", "error"):
+                return self.result()
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Run {self._id[:8]} did not complete within {timeout}s "
+                    f"(current status: {status})"
+                )
+            time.sleep(poll_interval)
+
     # ── Streaming ─────────────────────────────────────────────────────────────
 
     async def stream(self) -> AsyncGenerator[AgentEvent, None]:

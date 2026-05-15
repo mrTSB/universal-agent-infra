@@ -69,6 +69,11 @@ export type StartRunOptions = {
    * are picked up automatically — the agent resumes from its last checkpoint.
    */
   resumeId?: string;
+  /**
+   * Hard cost ceiling in USD. The agent is stopped automatically the turn after
+   * this threshold is crossed. Takes effect server-side — not just a prompt hint.
+   */
+  maxCostUsd?: number;
 };
 
 /**
@@ -166,8 +171,23 @@ export async function startRun(opts: StartRunOptions): Promise<registry.AgentRec
       invalidateAISummary(id); // stale after each turn
 
       console.log(
-        `[run:${id.slice(0, 8)}] Turn ${rec.turnCount} — $${rec.totalCostUsd.toFixed(2)}`
+        `[run:${id.slice(0, 8)}] Turn ${rec.turnCount} — $${rec.totalCostUsd.toFixed(4)}`
       );
+
+      // Hard budget enforcement — stop after the turn that crosses the ceiling
+      if (opts.maxCostUsd !== undefined && rec.totalCostUsd >= opts.maxCostUsd) {
+        console.warn(
+          `[run:${id.slice(0, 8)}] Budget $${opts.maxCostUsd} reached ` +
+          `(spent $${rec.totalCostUsd.toFixed(4)}) — stopping`
+        );
+        registry.broadcast(id, {
+          type: "budget_exceeded",
+          limit: opts.maxCostUsd,
+          cost: rec.totalCostUsd,
+          ts: Date.now(),
+        });
+        stopRun(id);
+      }
     },
   });
 

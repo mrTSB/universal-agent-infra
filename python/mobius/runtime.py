@@ -54,12 +54,60 @@ class Runtime:
         agent._sync_tools()
 
         body: Dict[str, Any] = {"task": agent._build_task_prompt(task)}
+        if agent.max_cost is not None:
+            body["maxCostUsd"] = agent.max_cost   # server-side hard stop
         sub_agents = agent._sub_agents_dict()
         if sub_agents:
             body["subAgents"] = sub_agents
 
         response = self._client._req("POST", "/api/agents", json=body).json()
         return Run(_AgentModel.from_dict(response).id, self._client)
+
+    def batch(
+        self,
+        agent: "Agent",
+        tasks: List[Union[str, "Task"]],
+        *,
+        wait: bool = False,
+        poll_interval: float = 3.0,
+    ) -> List["Run"]:  # type: ignore[name-defined]
+        """
+        Start multiple agent runs in parallel, one per task.
+
+        All runs share the same agent definition (tools, models, constraints).
+        Returns Run handles immediately unless wait=True.
+
+        Args:
+            agent:         Agent definition to use for every run.
+            tasks:         List of task strings or Task objects.
+            wait:          Block until every run completes before returning.
+            poll_interval: Poll frequency in seconds when wait=True.
+
+        Example:
+            runs = runtime.batch(agent, [
+                "Summarise paper A",
+                "Summarise paper B",
+                "Summarise paper C",
+            ], wait=True)
+
+            for run in runs:
+                print(run.id, run.cost)
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        with ThreadPoolExecutor(max_workers=min(len(tasks), 10)) as pool:
+            futures = [pool.submit(self.run, agent, t) for t in tasks]
+            runs = [f.result() for f in as_completed(futures)]
+
+        if wait:
+            with ThreadPoolExecutor(max_workers=len(runs)) as pool:
+                futures_w = [
+                    pool.submit(r.wait, poll_interval=poll_interval) for r in runs
+                ]
+                for f in as_completed(futures_w):
+                    f.result()  # surface any exceptions
+
+        return runs
 
     def pause(self, run_id: str) -> None:
         """

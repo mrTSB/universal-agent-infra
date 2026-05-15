@@ -1,4 +1,6 @@
 import type { ServerWebSocket } from "bun";
+import { statSync } from "fs";
+import { join } from "path";
 import * as registry from "./agent-registry.ts";
 import { startRun, stopRun } from "./agent-run.ts";
 import * as aiSummary from "./ai-summary.ts";
@@ -145,6 +147,15 @@ export function startAPIServer(): void {
         return json({ invalidated: true });
       }
 
+      // Artifacts — files created/modified in the agent workspace
+      const artifactsMatch = pathname.match(/^\/api\/agents\/([^/]+)\/artifacts$/);
+      if (artifactsMatch && method === "GET") {
+        const agentId = artifactsMatch[1];
+        const record = registry.get(agentId);
+        if (!record) return json({ error: "Not found" }, 404);
+        return handleGetArtifacts(record.workspacePath);
+      }
+
       // Resume a stopped agent (reuses its workspace + last state.json checkpoint)
       const resumeMatch = pathname.match(/^\/api\/agents\/([^/]+)\/resume$/);
       if (resumeMatch && method === "POST") {
@@ -282,16 +293,19 @@ async function handleCreateAgent(req: Request): Promise<Response> {
 
   let task: string | undefined;
   let subAgents: Record<string, { description: string; prompt: string; model?: string }> | undefined;
+  let maxCostUsd: number | undefined;
   try {
     const body = (await req.json()) as {
       task?: string;
       subAgents?: Record<string, { description: string; prompt: string; model?: string }>;
+      maxCostUsd?: number;
     };
     task = body.task?.trim() || undefined;
     subAgents = body.subAgents;
+    maxCostUsd = typeof body.maxCostUsd === "number" ? body.maxCostUsd : undefined;
   } catch { /* body is optional */ }
 
-  const record = await startRun({ task, subAgents });
+  const record = await startRun({ task, subAgents, maxCostUsd });
 
   return json(
     {
@@ -323,6 +337,43 @@ async function handleSendMessage(agentId: string, req: Request): Promise<Respons
   registry.broadcast(agentId, { type: "user_message", text, ts: Date.now() });
 
   return json({ delivered: true });
+}
+
+async function handleGetArtifacts(workspacePath: string): Promise<Response> {
+  try {
+    const proc = Bun.spawn(["git", "status", "--porcelain"], {
+      cwd: workspacePath,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+
+    const STATUS: Record<string, string> = {
+      M: "modified", A: "added", D: "deleted",
+      R: "renamed",  C: "copied", "??": "new",
+    };
+
+    const files: Array<{ path: string; status: string; size_bytes: number }> = [];
+    let totalBytes = 0;
+
+    for (const line of output.trim().split("\n")) {
+      if (!line.trim()) continue;
+      const code = line.slice(0, 2).trim();
+      const filePath = line.slice(3).trim().split(" -> ").pop()!; // handle renames
+      let size = 0;
+      try {
+        size = statSync(join(workspacePath, filePath)).size;
+      } catch { /* deleted or unreadable */ }
+      files.push({ path: filePath, status: STATUS[code] ?? code, size_bytes: size });
+      totalBytes += size;
+    }
+
+    return json({ files, total_files: files.length, total_size_bytes: totalBytes, workspace: workspacePath });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return json({ error: `Could not read workspace: ${msg}` }, 500);
+  }
 }
 
 async function handleCreateTool(req: Request): Promise<Response> {
