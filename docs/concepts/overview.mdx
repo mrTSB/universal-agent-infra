@@ -1,0 +1,58 @@
+---
+title: "Core concepts"
+description: "The building blocks of the Aeon Python SDK."
+keywords: ["agent", "task", "run", "objective", "runtime", "swarm"]
+---
+
+Aeon separates **definition**, **goal**, and **execution**. That split lets the same agent pursue short one-off tasks or long-lived objectives.
+
+## Building blocks
+
+| Class | Owns |
+| --- | --- |
+| `Agent` | Definition — name, models, tools, constraints, policy, memory |
+| `Task` | Short-lived goal — what to accomplish and success criteria |
+| `Run` | Live one-off execution — stream, steer, stop, read results |
+| `Runtime` | Execution control — start, pause, resume, replay, list runs and objectives |
+| `Objective` | Durable outcome — context, criteria, playbook, budgets, metadata |
+| `ObjectiveRun` | Event-driven control, ledgers, and approvals for one objective |
+| `Swarm` | Multi-agent team (subclass of `Agent`) |
+| `SubAgent` | One role inside a swarm |
+| `Policy` | Tool access, risk, approval gates, containment, retries |
+| `Budget` | Hard limits across all wake cycles |
+
+## Two execution modes
+
+### One-off runs
+
+Use `agent.run(task)` when work should finish in a single interactive session. You get streaming, mid-run steering, pause/resume, and replay.
+
+```python
+run = agent.run("Research ML frameworks")
+run.send("Focus on production serving")
+print(run.result())
+```
+
+### Infinite-horizon objectives
+
+Use `agent.pursue(objective)` when work must survive process restarts, wait without spending tokens, react to external events, or require durable plans and approvals.
+
+```python
+run = agent.pursue(Objective(goal="Keep the service healthy"))
+run.emit("health.changed", {"healthy": False})
+```
+
+## Customization boundary
+
+The durable kernel has no CRM, support, sales, or other vertical assumptions. You define the domain through SDK inputs:
+
+- Goal, context, success criteria, priority, metadata
+- Primary and fallback models
+- System instructions
+- HTTP or shell tools
+- Specialist sub-agents
+- Playbooks and seeded plan steps
+- Memory retention and context limits
+- Budgets, risk mapping, approval gates, and retries
+
+See [Mobius architecture](/concepts/mobius) for how wakes, dormant waits, and durable state interact.

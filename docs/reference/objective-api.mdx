@@ -1,0 +1,119 @@
+---
+title: "Objective API"
+description: "Reference for Objective, ObjectiveRun, Budget, Policy, Playbook, and MemoryConfig."
+keywords: ["Objective", "ObjectiveRun", "Budget", "Policy", "Playbook"]
+---
+
+## Objective
+
+```python
+Objective(
+    goal: str,
+    context: str | None = None,
+    success_criteria: list[str] = [],
+    priority: int = 0,
+    budget: Budget | None = None,
+    policy: Policy | None = None,
+    memory: MemoryConfig | None = None,
+    playbook: Playbook | None = None,
+    metadata: dict = {},
+    start: bool = True,
+    id: str | None = None,
+)
+```
+
+## ObjectiveRun
+
+Returned by `agent.pursue(...)` or `Runtime().pursue(...)`.
+
+| Property / method | Description |
+| --- | --- |
+| `id` | Objective UUID |
+| `status` | Current durable status |
+| `cycles` | Wake cycle count |
+| `cost` | Total USD spent |
+| `result` | Terminal result string, if any |
+| `snapshot()` | Full objective payload |
+| `emit(type, payload, *, dedupe_key=...)` | Emit a wake event |
+| `pause(reason=...)` | Dormant pause |
+| `resume()` | Queue another wake |
+| `cancel(reason=...)` | Terminal cancel |
+| `wait(timeout=...)` | Block until terminal |
+| `wait_until_idle(timeout=...)` | Block until idle or terminal |
+| `plan()` | Durable work graph |
+| `events()` | Event journal |
+| `memories()` | Memory ledger |
+| `actions()` | Action ledger |
+| `outcomes()` | Outcome ledger |
+| `approvals(pending_only=False)` | Approval list |
+| `approve(id, note=...)` | Approve a pending action |
+| `reject(id, note=...)` | Reject a pending action |
+
+Idle statuses: `waiting`, `blocked`, `completed`, `failed`, `cancelled`.  
+Terminal statuses: `completed`, `failed`, `cancelled`.
+
+## Budget
+
+```python
+Budget(
+    max_cost_usd: float | None = None,
+    max_cycles: int | None = None,
+    max_turns_per_cycle: int | None = None,
+    max_minutes: float | None = None,
+    max_tool_calls: int | None = None,
+)
+```
+
+## Policy
+
+```python
+Policy(
+    allowed_tools: list[str] | None = None,
+    denied_tools: list[str] | None = None,
+    approval_required_tools: list[str] | None = None,
+    approval_risk_level: str | None = None,
+    default_risk_level: str | None = None,
+    tool_risk_levels: dict[str, str] | None = None,
+    retry: RetryPolicy | None = None,
+    workspace_only: bool | None = None,
+)
+```
+
+## RetryPolicy
+
+```python
+RetryPolicy(
+    max_attempts: int | None = None,
+    initial_delay_ms: int | None = None,
+    max_delay_ms: int | None = None,
+    multiplier: float | None = None,
+)
+```
+
+## MemoryConfig
+
+```python
+MemoryConfig(
+    enabled: bool = True,
+    max_context_items: int | None = None,
+    kinds: list[str] | None = None,
+)
+```
+
+## Playbook
+
+```python
+Playbook(
+    name: str,
+    version: str | None = None,
+    instructions: str | None = None,
+    steps: list[PlaybookStep] = [],
+)
+
+PlaybookStep(
+    title: str,
+    description: str | None = None,
+    success_criteria: list[str] = [],
+    depends_on: list[str] = [],
+)
+```

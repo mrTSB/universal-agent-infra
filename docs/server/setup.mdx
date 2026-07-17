@@ -1,0 +1,72 @@
+---
+title: "Server setup"
+description: "Run the Aeon agent server locally or in Modal."
+keywords: ["server", "bun", "pnpm", "modal", "anthropic"]
+---
+
+The Python SDK requires a running Aeon server. The server hosts agent processes, durable Mobius state, tools, and the control-plane API.
+
+## Desktop (default)
+
+```bash
+pnpm install
+cp .env.example .env
+# set ANTHROPIC_API_KEY=sk-ant-...
+pnpm run agent
+```
+
+Or:
+
+```bash
+bun run agent
+```
+
+On startup the agent figures out what the human wants it to do. If you already gave a clear task, it works on that; otherwise it asks. It does not invent a company-building mission on its own.
+
+## Anthropic API key
+
+The main agent is Anthropic-only. Provide `ANTHROPIC_API_KEY` in `.env` or the shell. Missing keys cause an immediate startup exit — there is no Vertex fallback.
+
+`GEMINI_API_KEY` does not power the main agent; it only helps Browserbase Stagehand browser tools when browser automation is enabled.
+
+## Safe copy on Modal CPU
+
+```bash
+bun run agent:safe
+```
+
+One-time Modal auth:
+
+```bash
+python3 -m pip install modal
+modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
+```
+
+Safe mode runs the same command path in a Modal sandbox and streams terminal output live.
+
+## Generic Modal wrapper
+
+```bash
+./modal/run -- <your command>
+./modal/run --port 3000 -- npm run dev
+```
+
+If a port is exposed, the script prints the Modal tunnel URL.
+
+## Objectives control plane
+
+The versioned HTTP API is rooted at `/api/v1/objectives`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/v1/objectives` | Create and optionally start an objective |
+| `GET` | `/api/v1/objectives` | List, optionally filtered by status |
+| `GET` | `/api/v1/objectives/:id` | Read objective plus plan, approvals, outcomes |
+| `POST` | `/api/v1/objectives/:id/events` | Emit a deduplicated external event |
+| `POST` | `/api/v1/objectives/:id/pause` | Dormant pause until resume |
+| `POST` | `/api/v1/objectives/:id/resume` | Queue another bounded wake |
+| `POST` | `/api/v1/objectives/:id/cancel` | Terminal cancellation |
+| `GET` | `/api/v1/objectives/:id/:ledger` | Read plan, events, memories, actions, outcomes, or approvals |
+| `POST` | `/api/v1/objectives/:id/approvals/:approvalId/resolve` | Approve or reject an action |
+
+The Python SDK wraps these endpoints through `ObjectiveRun` and `Runtime`.

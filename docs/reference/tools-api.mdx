@@ -1,0 +1,67 @@
+---
+title: "Tools API"
+description: "HttpTool and ShellTool constructor reference."
+keywords: ["HttpTool", "ShellTool", "params", "reference"]
+---
+
+```python
+from aeon.tools import HttpTool, ShellTool
+```
+
+Param tuple format: `(type, description, required)` where type is `"string"`, `"number"`, `"integer"`, `"boolean"`, or `"array"`.
+
+## HttpTool
+
+```python
+HttpTool(
+    name: str,
+    description: str,
+    url: str,
+    method: str = "POST",
+    headers: dict[str, str] | None = None,
+    params: dict[str, ParamDef] = {},
+)
+```
+
+- POST/PUT/PATCH: parameters sent as JSON body
+- GET: parameters sent as query string
+- Response body returned to the agent as text
+
+## ShellTool
+
+```python
+ShellTool(
+    name: str,
+    description: str,
+    command: str,
+    cwd: str | None = None,
+    timeout_ms: int | None = None,
+    params: dict[str, ParamDef] = {},
+)
+```
+
+- Substitute `{{param}}` tokens in `command` (values are shell-quoted)
+- Returns stdout + stderr to the agent
+
+## Swarm / SubAgent
+
+```python
+from aeon import Swarm
+from aeon.swarm import SubAgent
+
+SubAgent(
+    name: str,
+    role: str,
+    system_prompt: str | None = None,
+    model: str = "sonnet",  # "sonnet" | "opus" | "haiku"
+)
+
+Swarm(
+    agents: list[SubAgent],
+    max_cost: float | None = None,
+    context: str | None = None,
+    # plus Agent constructor kwargs
+)
+```
+
+`Swarm` subclasses `Agent`, so `swarm.run(...)` and `Runtime().run(swarm, ...)` both work.

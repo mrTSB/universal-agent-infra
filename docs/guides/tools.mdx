@@ -1,0 +1,60 @@
+---
+title: "Tools"
+description: "Register HTTP and shell tools for agents."
+keywords: ["tools", "HttpTool", "ShellTool", "params"]
+---
+
+Tools are synced to the server when `run()` or `pursue()` is called. You can also manage them in the web UI at `/tools`.
+
+## HTTP tools
+
+```python
+from aeon.tools import HttpTool
+
+HttpTool(
+    name="notify_slack",
+    description="Send a message to the #builds Slack channel.",
+    url="https://hooks.slack.com/...",
+    method="POST",
+    headers={"Content-Type": "application/json"},
+    params={"text": ("string", "Message to send", True)},
+)
+```
+
+Input parameters are sent as a JSON body (POST/PUT/PATCH) or query string (GET). The response body is returned to the agent as text.
+
+## Shell tools
+
+```python
+from aeon.tools import ShellTool
+
+ShellTool(
+    name="deploy",
+    description="Deploy to staging. Run after tests pass.",
+    command="./scripts/deploy.sh --env {{env}} --tag {{tag}}",
+    cwd="/path/to/project",
+    timeout_ms=120_000,
+    params={
+        "env": ("string", "Target environment", True),
+        "tag": ("string", "Git tag to deploy", True),
+    },
+)
+```
+
+Use `{{param_name}}` in the command string. Values are shell-quoted before substitution. stdout and stderr are returned to the agent.
+
+## Parameter tuples
+
+Format: `(type, description, required)`
+
+| Type | Use |
+| --- | --- |
+| `"string"` | Text |
+| `"number"` | Floats |
+| `"integer"` | Integers |
+| `"boolean"` | True / false |
+| `"array"` | Lists |
+
+## Policy-gated tools
+
+Combine tools with [`Policy`](/guides/policy-and-approvals) to deny tools, require approvals, and map risk levels before execution.

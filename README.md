@@ -105,7 +105,8 @@ The server exposes the same control plane under `/api/v1/objectives`: objective
 snapshots, durable plan steps, events, memories, action ledger, outcomes,
 approvals, pause/resume/cancel, and approval resolution.
 
-See [MOBIUS_ARCHITECTURE.md](./MOBIUS_ARCHITECTURE.md) and
+See the Mintlify docs in [`docs/`](./docs/) (`mint dev` from that folder), plus
+[MOBIUS_ARCHITECTURE.md](./MOBIUS_ARCHITECTURE.md) and
 [python/README.md](./python/README.md) for the full lifecycle and SDK reference.
 
 ## Safety Invariants

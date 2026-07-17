@@ -1,0 +1,91 @@
+---
+title: "Agents and tasks"
+description: "Define agents and run one-off tasks."
+keywords: ["agent", "task", "run", "models", "one-off"]
+---
+
+For short-lived interactive work, use `Agent`, `Task`, and `Run`.
+
+## Define an agent
+
+```python
+from aeon import Agent, Task, SONNET, OPUS
+from aeon.tools import HttpTool, ShellTool
+
+agent = Agent(
+    name="builder",
+    models=[SONNET, OPUS],  # primary, then fallback
+    tools=[
+        HttpTool(
+            name="search_db",
+            description="Search the internal database. Use when asked about products.",
+            url="http://localhost:8080/search",
+            params={"query": ("string", "Search query", True)},
+        ),
+        ShellTool(
+            name="run_tests",
+            description="Run the test suite before committing.",
+            command="pytest {{pattern}} -v",
+        ),
+    ],
+    max_cost=5.0,   # optional USD budget
+    max_steps=100,  # optional turn limit
+)
+```
+
+## Model constants
+
+```python
+from aeon import SONNET, HAIKU, OPUS
+
+SONNET  # "claude-sonnet-4-6"
+HAIKU   # "claude-haiku-4-5"
+OPUS    # "claude-opus-4-7"
+```
+
+## Tasks
+
+```python
+task = Task(
+    goal="Build a CLI todo app in Python",
+    context="Use Click. Store todos in SQLite.",
+    success_criteria=[
+        "all tests pass",
+        "README explains install and usage",
+        "pip install -e . works",
+    ],
+)
+
+run = agent.run(task)
+# or: agent.run("Build a CLI todo app")
+```
+
+## Agent methods
+
+```python
+run   = agent.run("Build a CLI todo app")
+sub   = agent.spawn("Write tests for auth.py")
+run2  = agent.resume(run.id)
+state = agent.inspect(run.id)
+obj   = agent.pursue(objective)   # durable path — see Objectives
+```
+
+`agent.run(task)` is shorthand for `Runtime().run(agent, task)`.
+
+## Inspect a run
+
+```python
+run.id        # UUID
+run.status    # "starting" | "running" | "stopped" | "error"
+run.cost      # cumulative USD
+run.turns     # completed turns
+run.workspace # absolute workspace path on the server
+
+run.send("Focus on Python 3.12+")
+run.stop()
+
+run.result()      # snapshot dict
+run.analytics()   # turn-by-turn tool breakdown
+run.summary()     # AI narrative (needs OPENROUTER_API_KEY on server)
+run.artifacts()   # files created or modified in the workspace
+```

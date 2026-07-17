@@ -1,0 +1,55 @@
+---
+title: "Policy and approvals"
+description: "Gate tools with risk levels, denylists, and durable human approvals."
+keywords: ["policy", "approval", "risk", "retry", "workspace"]
+---
+
+Every non-lifecycle action is evaluated before execution. Policies support allowlists, denylists, risk levels, approval gates, workspace containment, and retries.
+
+## Define a policy
+
+```python
+from aeon import Policy, RetryPolicy
+
+policy = Policy(
+    denied_tools=["Bash"],
+    approval_required_tools=["publish_change", "deploy"],
+    tool_risk_levels={"publish_change": "critical", "deploy": "critical"},
+    approval_risk_level="high",
+    default_risk_level="medium",
+    workspace_only=True,
+    retry=RetryPolicy(max_attempts=4, initial_delay_ms=1000),
+)
+```
+
+Attach policy on the agent (definition-wide) or on the objective (per-outcome overrides via `Objective.policy`).
+
+## What policies enforce
+
+- Explicit tool allowlists and denylists
+- Per-tool and default risk levels
+- Approval by named tool or risk threshold
+- Fail-closed workspace containment (`workspace_only`)
+- Retry / backoff configuration
+- Objective-wide tool-call limits (via `Budget`)
+
+## Approval flow
+
+An action that requires approval transitions the objective to `waiting` for a specific `approval.<id>.resolved` event. Resolution is durable, wakes the objective, and reuses the action idempotency key so the reviewed action can proceed without a second approval.
+
+```python
+for approval in run.approvals(pending_only=True):
+    run.approve(approval["id"], note="Safe to ship")
+    # run.reject(approval["id"], note="Blocked by freeze")
+```
+
+## Retry policy
+
+```python
+RetryPolicy(
+    max_attempts=4,
+    initial_delay_ms=1000,
+    max_delay_ms=60_000,
+    multiplier=2.0,
+)
+```

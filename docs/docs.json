@@ -1,0 +1,87 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "maple",
+  "name": "Aeon",
+  "description": "Python SDK for durable, universal infinite-horizon agents.",
+  "colors": {
+    "primary": "#0F766E",
+    "light": "#2DD4BF",
+    "dark": "#115E59"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "icon": "book-open",
+        "groups": [
+          {
+            "group": "Getting started",
+            "icon": "rocket",
+            "pages": [
+              "index",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "icon": "lightbulb",
+            "pages": [
+              "concepts/overview",
+              "concepts/mobius"
+            ]
+          },
+          {
+            "group": "Guides",
+            "icon": "compass",
+            "pages": [
+              "guides/objectives",
+              "guides/agents-and-tasks",
+              "guides/runtime",
+              "guides/tools",
+              "guides/swarms",
+              "guides/streaming",
+              "guides/policy-and-approvals"
+            ]
+          },
+          {
+            "group": "Server",
+            "icon": "server",
+            "pages": [
+              "server/setup"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API reference",
+        "icon": "square-terminal",
+        "groups": [
+          {
+            "group": "Python SDK",
+            "icon": "python",
+            "pages": [
+              "reference/sdk",
+              "reference/objective-api",
+              "reference/tools-api",
+              "reference/exceptions"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/mrTSB/universal-agent-infra"
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/mrTSB/universal-agent-infra"
+    }
+  }
+}

@@ -1,0 +1,59 @@
+---
+title: "Swarms"
+description: "Coordinate specialized sub-agents under one orchestrator."
+keywords: ["swarm", "subagent", "multi-agent", "memory"]
+---
+
+A `Swarm` coordinates specialized sub-agents under one orchestrator. All agents share a workspace. Shared state lives in `.swarm/memory.md`.
+
+## Define a swarm
+
+```python
+from aeon import Swarm, Runtime
+from aeon.swarm import SubAgent
+
+swarm = Swarm(
+    agents=[
+        SubAgent("planner", role="Break work into milestones with acceptance criteria"),
+        SubAgent("coder", role="Implement each milestone as clean, tested code"),
+        SubAgent("critic", role="Review code, run tests, report issues"),
+    ],
+    max_cost=10.0,
+    context="Stack: Python + Click + SQLite. Tests: pytest.",
+)
+
+run = swarm.run("Build a CLI todo app with full test coverage")
+```
+
+With an explicit runtime:
+
+```python
+runtime = Runtime()
+run = runtime.run(swarm, "Build a CLI todo app…")
+runtime.pause(run.id)
+run2 = runtime.resume(run.id)
+```
+
+## SubAgent
+
+```python
+SubAgent(
+    name="analyzer",                          # snake_case; used by orchestrator
+    role="Analyse code for security issues",  # shown to orchestrator
+    system_prompt="...",                      # optional — derived from role if omitted
+    model="sonnet",                           # "sonnet" | "opus" | "haiku"
+)
+```
+
+## Shared memory
+
+The orchestrator maintains `.swarm/memory.md` in the workspace.
+
+| When | What happens |
+| --- | --- |
+| Swarm starts | Orchestrator creates `.swarm/memory.md` with goal + context |
+| Before each agent call | Orchestrator writes a delegation block |
+| Sub-agent runs | Reads memory for context, appends results when done |
+| Orchestrator decides next step | Reads accumulated memory, not just the last result |
+
+Sub-agent system prompts include these instructions automatically. Override per agent with a custom `system_prompt`.

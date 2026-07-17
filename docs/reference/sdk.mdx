@@ -1,0 +1,116 @@
+---
+title: "Agent, Task, Run, Runtime"
+description: "Python SDK reference for one-off agent execution."
+keywords: ["api", "Agent", "Task", "Run", "Runtime", "reference"]
+---
+
+## Agent
+
+```python
+Agent(
+    name: str,
+    models: list[str] | None = None,
+    tools: list[Tool] | None = None,
+    system_prompt: str | None = None,
+    max_cost: float | None = None,
+    max_steps: int | None = None,
+    policy: Policy | None = None,
+    memory: MemoryConfig | None = None,
+)
+```
+
+| Method | Returns | Description |
+| --- | --- | --- |
+| `run(task)` | `Run` | Start a one-off run (`str` or `Task`) |
+| `spawn(task)` | `Run` | Spawn a focused sub-task |
+| `resume(run_id)` | `Run` | Continue from last checkpoint |
+| `inspect(run_id)` | `dict` | Snapshot by run ID |
+| `pursue(objective)` | `ObjectiveRun` | Start a durable objective |
+
+## Task
+
+```python
+Task(
+    goal: str,
+    context: str | None = None,
+    success_criteria: list[str] | None = None,
+)
+```
+
+## Run
+
+| Property / method | Description |
+| --- | --- |
+| `id` | Run UUID |
+| `status` | `starting` \| `running` \| `stopped` \| `error` |
+| `cost` | Cumulative USD |
+| `turns` | Completed turns |
+| `workspace` | Absolute workspace path |
+| `send(message)` | Steer mid-run |
+| `stop()` | Halt; state preserved |
+| `result()` | Snapshot dict |
+| `analytics()` | Turn-by-turn tool breakdown |
+| `summary()` | AI narrative summary |
+| `invalidate_summary()` | Force summary regeneration |
+| `artifacts()` | Files created or modified |
+| `stream()` | Async event generator |
+
+## Runtime
+
+```python
+Runtime(server_url: str | None = None)
+```
+
+| Method | Description |
+| --- | --- |
+| `run(agent, task)` | Start a one-off run |
+| `pause(run_id)` | Stop and preserve state |
+| `resume(run_id)` | Continue from checkpoint |
+| `replay(run_id)` | Same task, clean slate |
+| `get(run_id)` | Handle to an existing run |
+| `list()` | All runs as `Run` objects |
+| `list_details()` | All runs as dicts |
+| `pursue(agent, objective)` | Start a durable objective |
+| `get_objective(id)` | Reconnect to an objective |
+| `list_objectives(statuses=...)` | List durable objectives |
+
+## Model constants
+
+```python
+from aeon import SONNET, HAIKU, OPUS
+```
+
+| Constant | Model ID |
+| --- | --- |
+| `SONNET` | `claude-sonnet-4-6` |
+| `HAIKU` | `claude-haiku-4-5` |
+| `OPUS` | `claude-opus-4-7` |
+
+## AeonClient
+
+Low-level HTTP wrapper for direct API access:
+
+```python
+from aeon import AeonClient
+
+client = AeonClient()
+agents = client.list_agents()
+client.set_config(ANTHROPIC_API_KEY="sk-ant-...")
+tools = client.list_tools()
+```
+
+## Package layout
+
+```text
+python/aeon/
+  __init__.py    exports
+  agent.py       Agent, Task, Run + model constants
+  objective.py   Objective, ObjectiveRun, budgets, policies, memory, playbooks
+  runtime.py     Runtime
+  swarm.py       Swarm, SubAgent
+  tools.py       HttpTool, ShellTool
+  client.py      AeonClient
+  models.py      dataclasses for API responses
+  streaming.py   WebSocket async generator
+  exceptions.py  error types
+```

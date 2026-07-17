@@ -1,0 +1,93 @@
+---
+title: "Mobius architecture"
+description: "Bounded wake cycles for durable infinite-horizon agents."
+keywords: ["mobius", "wake cycle", "observe", "plan", "act", "verify", "durable"]
+---
+
+Aeon separates a long-lived **objective** from the short-lived **model process** that advances it. An objective can exist for months or years, while each model wake is small, bounded, auditable, and replaceable.
+
+## Control loop
+
+Each wake executes one Mobius cycle:
+
+<Steps>
+  <Step title="Observe">
+    Read the objective, new events, plan graph, memories, outcomes, and workspace.
+  </Step>
+  <Step title="Plan">
+    Choose the smallest useful next step and persist plan changes.
+  </Step>
+  <Step title="Act">
+    Call policy-gated tools or bounded specialist sub-agents.
+  </Step>
+  <Step title="Verify">
+    Confirm results with tests, direct inspection, or external evidence.
+  </Step>
+  <Step title="Reflect">
+    Write into working, episodic, semantic, or procedural memory.
+  </Step>
+  <Step title="Report">
+    Exit with one transition: `continue`, `wait`, `block`, `complete`, or `fail`.
+  </Step>
+</Steps>
+
+`wait` stores an optional ISO wake time or event type. No process or model call is kept alive while an objective is dormant.
+
+## Status model
+
+```text
+queued -> running -> continue -> queued
+                  -> wait ------> waiting --(time/event/resume)--> queued
+                  -> block -----> blocked --(resume)------------> queued
+                  -> complete --> completed
+                  -> fail ------> waiting (retry) | failed
+any nonterminal --(cancel)------> cancelled
+```
+
+Terminal states are `completed`, `failed`, and `cancelled`. `waiting` and `blocked` are durable idle states, not failed model processes.
+
+## Durable kernel
+
+`MobiusStore` is a SQLite journal (WAL mode, foreign keys). It stores:
+
+| Record | Purpose |
+| --- | --- |
+| Objective | Goal, criteria, definition, policy, budgets, status, accounting |
+| Plan step | Dependency-aware work graph with attempts, evidence, results |
+| Event | External or internal wake signal with dedupe and consumption state |
+| Action | Tool intent, risk, idempotency key, attempts, output, error |
+| Memory | Typed knowledge with confidence, provenance, optional expiry |
+| Outcome | Measured result and supporting evidence |
+| Approval | Durable human decision attached to a risky action |
+| Checkpoint | Pre-cycle snapshot for inspection and recovery |
+
+Workers claim objectives with expiring leases. Startup recovery returns interrupted `running` or `planning` objectives to the queue. Duplicate event and action keys are safe across retries.
+
+## Bounded execution
+
+Each wake invokes the model with hard `maxTurns` and `maxBudgetUsd` values. The runtime also enforces objective-wide:
+
+- Maximum total cost
+- Maximum wake cycles
+- Maximum active execution minutes
+- Maximum tool calls
+
+Dormant wall-clock time is excluded from active-runtime accounting, so an objective can wait indefinitely without exhausting a time budget or spending tokens.
+
+## Safety invariants
+
+<Check>
+A wake is bounded by SDK-native turn and cost limits — no self-reprompt loop runs forever.
+</Check>
+<Check>
+Waiting objectives consume no model tokens and can remain dormant indefinitely.
+</Check>
+<Check>
+SQLite state, checkpoints, leases, plans, events, actions, memories, approvals, and outcomes survive restarts.
+</Check>
+<Check>
+Denied and high-risk tools are blocked before execution; high-risk actions become durable approvals.
+</Check>
+<Check>
+Event and action idempotency keys prevent duplicate side effects across retries.
+</Check>

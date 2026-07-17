@@ -1,0 +1,44 @@
+---
+title: "Streaming"
+description: "Subscribe to live run events over WebSocket."
+keywords: ["stream", "websocket", "events", "thinking", "tool_use"]
+---
+
+One-off `Run` objects expose an async event stream.
+
+```python
+import asyncio
+
+async def watch(run):
+    async for event in run.stream():
+        t = event.type
+        if t == "thinking":
+            print("◌")
+        elif t == "tool_use":
+            print(f"⚙  {event.data['name']}")
+        elif t == "agent_message":
+            print(f"\nAgent: {event.data['text']}\n")
+        elif t == "ping":
+            print(f"⚡ {event.data['message']}")
+            run.send("Yes, proceed.")
+        elif t == "turn_complete":
+            d = event.data
+            print(f"✓ Turn {d['turns']}  ${d['cost']:.4f}  {d['duration_ms']/1000:.1f}s")
+
+asyncio.run(watch(run))
+```
+
+## Event types
+
+| Type | Meaning |
+| --- | --- |
+| `thinking` | Model is reasoning |
+| `tool_use` | Tool invocation started |
+| `tool_result` | Tool returned output |
+| `agent_message` | Assistant text |
+| `turn_complete` | Turn finished with cost / duration |
+| `ping` | Agent is asking for confirmation |
+| `user_message` | Injected user message |
+| `status` | Run status change |
+
+Steer mid-run with `run.send(...)` and halt with `run.stop()`.

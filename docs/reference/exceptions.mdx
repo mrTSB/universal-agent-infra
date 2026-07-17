@@ -1,0 +1,30 @@
+---
+title: "Exceptions"
+description: "Error types raised by the Aeon Python SDK."
+keywords: ["exceptions", "ServerNotRunningError", "AgentNotFoundError"]
+---
+
+```python
+from aeon import (
+    AeonError,
+    ServerNotRunningError,
+    AgentNotFoundError,
+    ObjectiveNotFoundError,
+)
+
+try:
+    run = agent.run(task)
+except ServerNotRunningError:
+    print("Start the server: pnpm run agent")
+except AgentNotFoundError:
+    print("Run ID not found")
+except ObjectiveNotFoundError:
+    print("Objective ID not found")
+```
+
+| Exception | When |
+| --- | --- |
+| `AeonError` | Base class for SDK errors |
+| `ServerNotRunningError` | Cannot reach the Aeon server |
+| `AgentNotFoundError` | One-off run ID does not exist |
+| `ObjectiveNotFoundError` | Durable objective ID does not exist |

@@ -1,0 +1,89 @@
+---
+title: "Installation"
+description: "Install the Aeon Python SDK and start the server."
+keywords: ["install", "pip", "aeon-agents", "setup"]
+---
+
+Aeon has two parts: a durable agent server, and a Python SDK that talks to it.
+
+## Prerequisites
+
+- Python 3.9+
+- Node.js / Bun or pnpm (to run the Aeon server)
+- An Anthropic API key for model-backed runs
+
+## Install the Python SDK
+
+From the repository root:
+
+```bash
+python -m pip install ./python
+```
+
+The package name is `aeon-agents`; you import it as `aeon`:
+
+```python
+from aeon import Agent, Objective, Runtime
+```
+
+## Start the server
+
+The SDK requires a running Aeon server.
+
+```bash
+pnpm install
+cp .env.example .env
+# set ANTHROPIC_API_KEY=sk-ant-...
+pnpm run agent
+```
+
+Or with Bun:
+
+```bash
+bun run agent
+```
+
+By default the SDK connects to `http://localhost:3000`. Override with:
+
+```bash
+export AEON_SERVER=http://your-host:3000
+```
+
+Or pass a URL to `Runtime`:
+
+```python
+from aeon import Runtime
+
+runtime = Runtime("http://remote:3000")
+```
+
+## Environment variables
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | Yes (for model runs) | Direct Anthropic API key for the main agent |
+| `AEON_SERVER` | No | SDK server URL (default `http://localhost:3000`) |
+| `CLAUDE_MODEL` | No | Default Claude model on the server |
+| `GEMINI_API_KEY` | No | Only used for Browserbase Stagehand browser tools |
+
+<Warning>
+If `ANTHROPIC_API_KEY` is missing, server startup exits immediately. Old Vertex env vars are ignored.
+</Warning>
+
+## Verify the install
+
+```bash
+pnpm test:sdk
+```
+
+This creates a clean virtual environment, installs `python/` with pip (non-editable), and runs SDK contract tests against a local HTTP test server — no API credentials required.
+
+For a live smoke test against a running, configured server:
+
+```bash
+AEON_SERVER=http://localhost:3000 pnpm test:sdk:live
+```
+
+## Next step
+
+Continue to the [quickstart](/quickstart) to pursue your first objective.

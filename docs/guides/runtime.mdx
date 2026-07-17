@@ -1,0 +1,43 @@
+---
+title: "Runtime"
+description: "Explicit execution control for runs and objectives."
+keywords: ["runtime", "pause", "resume", "replay", "list"]
+---
+
+`Runtime` owns execution. Use it when you want explicit control or to manage multiple runs and objectives.
+
+## One-off runs
+
+```python
+from aeon import Agent, Task, Runtime, SONNET
+
+agent = Agent(name="researcher", models=[SONNET])
+runtime = Runtime()  # or Runtime("http://remote:3000")
+
+run = runtime.run(agent, Task("Research ML frameworks"))
+runtime.pause(run.id)
+run2 = runtime.resume(run.id)
+run3 = runtime.replay(run.id)   # same task, clean slate
+run4 = runtime.get(run.id)
+runs = runtime.list()
+details = runtime.list_details()
+```
+
+## Durable objectives
+
+```python
+from aeon import Objective
+
+run = runtime.pursue(agent, Objective(goal="Keep the API healthy"))
+obj = runtime.get_objective(run.id)
+waiting = runtime.list_objectives(statuses=["waiting", "blocked"])
+```
+
+## Server URL
+
+```python
+Runtime()                          # AEON_SERVER or http://localhost:3000
+Runtime("http://staging:3000")
+```
+
+If the server is unreachable, SDK calls raise `ServerNotRunningError`.

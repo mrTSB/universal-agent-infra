@@ -1,0 +1,130 @@
+---
+title: "Quickstart"
+description: "Pursue your first durable infinite-horizon objective with Aeon."
+keywords: ["quickstart", "objective", "pursue", "getting started"]
+---
+
+This guide creates a durable objective that wakes on events, respects budgets and approvals, and can wait indefinitely without spending tokens.
+
+## 1. Start the server
+
+```bash
+pnpm run agent
+```
+
+Keep it running. The SDK talks to this process over HTTP.
+
+## 2. Install the SDK
+
+```bash
+python -m pip install ./python
+```
+
+## 3. Define an agent
+
+```python
+from aeon import Agent, Budget, MemoryConfig, Objective, Playbook, PlaybookStep, Policy, RetryPolicy
+from aeon.tools import HttpTool
+
+agent = Agent(
+    name="general-operator",
+    models=["claude-sonnet-4-6", "claude-haiku-4-5"],
+    system_prompt="Use primary evidence and prefer reversible actions.",
+    tools=[HttpTool(
+        name="inspect_system",
+        description="Read the current external system state.",
+        url="https://example.test/state",
+        method="GET",
+    )],
+    policy=Policy(
+        denied_tools=["Bash"],
+        approval_required_tools=["publish_change"],
+        tool_risk_levels={"publish_change": "critical"},
+        approval_risk_level="high",
+        retry=RetryPolicy(max_attempts=4, initial_delay_ms=1000),
+    ),
+    memory=MemoryConfig(max_context_items=40),
+)
+```
+
+## 4. Pursue an objective
+
+```python
+objective = Objective(
+    goal="Keep the target system healthy and publish verified improvements.",
+    context="React to health.changed and deployment.finished events.",
+    success_criteria=["Health is verified", "Every change has evidence"],
+    budget=Budget(
+        max_cost_usd=25,
+        max_cycles=10_000,
+        max_turns_per_cycle=20,
+        max_tool_calls=2_000,
+    ),
+    playbook=Playbook(
+        name="verify-and-improve",
+        version="1",
+        steps=[
+            PlaybookStep("Observe current state"),
+            PlaybookStep("Choose the smallest safe action"),
+            PlaybookStep("Verify the outcome"),
+        ],
+    ),
+    metadata={"owner": "platform"},
+)
+
+run = agent.pursue(objective)
+```
+
+Each wake performs one bounded Mobius cycle, then exits through `continue`, `wait`, `block`, `complete`, or `fail`. Waiting objectives are dormant and consume no model tokens.
+
+## 5. Emit events and control the run
+
+```python
+run.emit(
+    "health.changed",
+    {"service": "api", "healthy": False},
+    dedupe_key="health-api-1042",
+)
+
+run.pause("Maintenance window")
+run.resume()
+
+idle = run.wait_until_idle(timeout=120)
+snapshot = run.snapshot()
+```
+
+## 6. Inspect durable state
+
+```python
+run.plan()       # durable work graph
+run.events()     # wake / event journal
+run.memories()   # working, episodic, semantic, procedural
+run.actions()    # policy-aware tool ledger
+run.outcomes()   # measured results and evidence
+
+for approval in run.approvals(pending_only=True):
+    run.approve(approval["id"], note="Reviewed by release owner")
+```
+
+## One-off tasks instead
+
+For short-lived work that does not need durable waits or event wakeups:
+
+```python
+from aeon import Agent, Task, SONNET
+
+agent = Agent(name="builder", models=[SONNET])
+run = agent.run(Task("Build a CLI todo app in Python"))
+print(run.result())
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Mobius architecture" icon="infinity" href="/concepts/mobius">
+    How bounded wakes and durable state work together.
+  </Card>
+  <Card title="Objectives guide" icon="bullseye" href="/guides/objectives">
+    Events, approvals, budgets, and reconnection.
+  </Card>
+</CardGroup>

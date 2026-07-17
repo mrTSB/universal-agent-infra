@@ -1,0 +1,68 @@
+---
+title: "Aeon"
+description: "Python SDK for durable, universal infinite-horizon agents."
+keywords: ["aeon", "agents", "infinite horizon", "python sdk", "mobius"]
+---
+
+Aeon is customizable infrastructure for durable, general-purpose agents that can pursue outcomes across days, months, or years — without keeping a model process alive the whole time.
+
+Install the Python package, define an agent and an objective, and let the runtime advance work through bounded wake cycles.
+
+```python
+from aeon import Agent, Budget, Objective, Playbook, PlaybookStep, Policy
+
+agent = Agent(
+    name="release-operator",
+    models=["claude-sonnet-4-6"],
+    system_prompt="Prefer reversible changes and verify every release.",
+    policy=Policy(
+        approval_required_tools=["deploy"],
+        tool_risk_levels={"deploy": "critical"},
+        workspace_only=True,
+    ),
+)
+
+run = agent.pursue(Objective(
+    goal="Keep this project releasable and publish verified releases.",
+    success_criteria=["Tests pass", "Release evidence is recorded"],
+    budget=Budget(max_cost_usd=20, max_cycles=10_000, max_turns_per_cycle=20),
+    playbook=Playbook(
+        name="verified-release",
+        steps=[
+            PlaybookStep("Inspect changes"),
+            PlaybookStep("Run verification"),
+            PlaybookStep("Publish with approval"),
+        ],
+    ),
+))
+
+run.emit("repository.changed", {"ref": "main"}, dedupe_key="push-123")
+```
+
+## Why Aeon
+
+<Columns cols={2}>
+  <Card title="Infinite horizon" icon="infinity" href="/concepts/mobius">
+    Objectives survive restarts. Waiting work is dormant and spends no tokens until an event, schedule, or resume wakes it.
+  </Card>
+  <Card title="Bounded wakes" icon="gauge" href="/concepts/mobius">
+    Each wake runs one Mobius cycle — observe, plan, act, verify, reflect, report — with hard turn and cost limits.
+  </Card>
+  <Card title="SDK-defined domain" icon="sliders" href="/concepts/overview">
+    Models, tools, playbooks, memory, budgets, risk policy, and approvals are all inputs. The kernel stays domain-neutral.
+  </Card>
+  <Card title="One-off and swarm APIs" icon="users" href="/guides/agents-and-tasks">
+    Interactive `Agent` / `Task` / `Run` and multi-agent `Swarm` APIs remain available for short-lived work.
+  </Card>
+</Columns>
+
+## Start here
+
+<CardGroup cols={2}>
+  <Card title="Install" icon="download" href="/installation">
+    Install the Python SDK and start the Aeon server.
+  </Card>
+  <Card title="Quickstart" icon="play" href="/quickstart">
+    Pursue your first durable objective in a few lines of Python.
+  </Card>
+</CardGroup>
