@@ -1,11 +1,19 @@
 # aeon
 
-Interactive autonomous CLI built on the Claude Agent SDK.
+Customizable infrastructure for durable, general-purpose infinite-horizon agents.
+
+Aeon uses the Mobius architecture: each objective advances through bounded
+`observe -> plan -> act -> verify -> reflect -> report` wake cycles, then becomes
+dormant until useful work, a schedule, or an external event wakes it again. The
+durable runtime is domain-neutral and the model, instructions, tools, sub-agents,
+playbook, memory, budgets, risk policy, and approval gates are all SDK inputs.
+
+The original interactive agent and swarm APIs remain available for one-off work.
 
 ## Setup
 
 ```bash
-bun install
+pnpm install
 ```
 
 Make sure your `.env` has the required credentials configured.
@@ -51,6 +59,75 @@ For software-heavy tasks, it can call the local engineering reference in [SOFTWA
 ```bash
 bun run agent
 ```
+
+## Infinite-Horizon SDK
+
+Install the Python SDK into any application:
+
+```bash
+python -m pip install ./python
+```
+
+```python
+from aeon import Agent, Budget, Objective, Playbook, PlaybookStep, Policy
+
+agent = Agent(
+    name="release-operator",
+    models=["claude-sonnet-4-6"],
+    system_prompt="Prefer reversible changes and verify every release.",
+    policy=Policy(
+        approval_required_tools=["deploy"],
+        tool_risk_levels={"deploy": "critical"},
+        workspace_only=True,
+    ),
+)
+
+run = agent.pursue(Objective(
+    goal="Keep this project releasable and publish verified releases.",
+    success_criteria=["Tests pass", "Release evidence is recorded"],
+    budget=Budget(max_cost_usd=20, max_cycles=10_000, max_turns_per_cycle=20),
+    playbook=Playbook(
+        name="verified-release",
+        steps=[
+            PlaybookStep("Inspect changes"),
+            PlaybookStep("Run verification"),
+            PlaybookStep("Publish with approval"),
+        ],
+    ),
+))
+
+run.emit("repository.changed", {"ref": "main"}, dedupe_key="push-123")
+for approval in run.approvals(pending_only=True):
+    run.approve(approval["id"], note="Release reviewed")
+```
+
+The server exposes the same control plane under `/api/v1/objectives`: objective
+snapshots, durable plan steps, events, memories, action ledger, outcomes,
+approvals, pause/resume/cancel, and approval resolution.
+
+See [MOBIUS_ARCHITECTURE.md](./MOBIUS_ARCHITECTURE.md) and
+[python/README.md](./python/README.md) for the full lifecycle and SDK reference.
+
+## Safety Invariants
+
+- A wake is bounded by SDK-native turn and cost limits; no self-reprompt loop runs forever.
+- Waiting objectives consume no model tokens and can remain dormant indefinitely.
+- SQLite state, checkpoints, leases, plans, events, actions, memories, approvals, and outcomes survive restarts.
+- Cost, cycle, active-runtime, and tool-call budgets are enforced by the runtime.
+- Denied and high-risk tools are blocked before execution; high-risk actions become durable approvals.
+- Event and action idempotency keys prevent duplicate side effects across retries.
+- Interrupted workers are recovered and stale leases are reclaimed on startup.
+
+## Tests
+
+```bash
+pnpm test
+pnpm test:sdk
+```
+
+`pnpm test:sdk` creates a clean virtual environment, performs a non-editable
+`pip install` of the package, and drives realistic one-off, swarm, and durable
+objective scenarios through the public SDK.
 
 ## Run Safe Copy On Modal CPU
 

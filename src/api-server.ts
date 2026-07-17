@@ -6,6 +6,8 @@ import { startRun, stopRun } from "./agent-run.ts";
 import * as aiSummary from "./ai-summary.ts";
 import * as config from "./config.ts";
 import * as toolRegistry from "./tool-registry.ts";
+import { handleObjectiveAPI } from "./objective-api.ts";
+import { objectiveRuntime } from "./objective-service.ts";
 
 const PORT = parseInt(process.env["UI_PORT"] ?? "3000");
 
@@ -17,6 +19,7 @@ type WSClient = ServerWebSocket<WSData>;
 // ---------------------------------------------------------------------------
 
 export function startAPIServer(): void {
+  objectiveRuntime.start();
   Bun.serve<WSData>({
     port: PORT,
 
@@ -27,7 +30,7 @@ export function startAPIServer(): void {
       // ── Analytics page ─────────────────────────────────────────────────
       const analyticsPageMatch = pathname.match(/^\/agents\/([^/]+)\/analytics$/);
       if (analyticsPageMatch) {
-        const agentId = analyticsPageMatch[1];
+        const agentId = analyticsPageMatch[1]!;
         const record = registry.get(agentId);
         if (!record) return new Response("Agent not found", { status: 404 });
         return html(buildAnalyticsHTML(agentId, record.task));
@@ -36,7 +39,7 @@ export function startAPIServer(): void {
       // ── WebSocket upgrade for /agents/:id ──────────────────────────────
       const agentPageMatch = pathname.match(/^\/agents\/([^/]+)$/);
       if (agentPageMatch) {
-        const agentId = agentPageMatch[1];
+        const agentId = agentPageMatch[1]!;
         if (req.headers.get("upgrade") === "websocket") {
           const upgraded = server.upgrade(req, { data: { agentId } });
           if (upgraded) return undefined;
@@ -58,6 +61,9 @@ export function startAPIServer(): void {
       }
 
       // ── REST API ───────────────────────────────────────────────────────
+      const objectiveResponse = handleObjectiveAPI(req, url);
+      if (objectiveResponse) return objectiveResponse;
+
       if (pathname === "/api/config" && method === "GET") {
         return json({ keys: config.status() });
       }
@@ -77,7 +83,7 @@ export function startAPIServer(): void {
 
       const toolMatch = pathname.match(/^\/api\/tools\/([^/]+)$/);
       if (toolMatch) {
-        const toolId = toolMatch[1];
+        const toolId = toolMatch[1]!;
         if (method === "GET") {
           const t = toolRegistry.get(toolId);
           return t ? json(t) : json({ error: "Not found" }, 404);
@@ -91,7 +97,7 @@ export function startAPIServer(): void {
 
       const toolToggleMatch = pathname.match(/^\/api\/tools\/([^/]+)\/toggle$/);
       if (toolToggleMatch && method === "POST") {
-        const toolId = toolToggleMatch[1];
+        const toolId = toolToggleMatch[1]!;
         const t = toolRegistry.get(toolId);
         if (!t) return json({ error: "Not found" }, 404);
         const updated = toolRegistry.update(toolId, { enabled: !t.enabled });
@@ -118,7 +124,7 @@ export function startAPIServer(): void {
 
       const apiAgentAnalyticsMatch = pathname.match(/^\/api\/agents\/([^/]+)\/analytics$/);
       if (apiAgentAnalyticsMatch && method === "GET") {
-        const agentId = apiAgentAnalyticsMatch[1];
+        const agentId = apiAgentAnalyticsMatch[1]!;
         const record = registry.get(agentId);
         if (!record) return json({ error: "Not found" }, 404);
         return json(computeAnalytics(record));
@@ -126,7 +132,7 @@ export function startAPIServer(): void {
 
       const apiAISummaryMatch = pathname.match(/^\/api\/agents\/([^/]+)\/ai-summary$/);
       if (apiAISummaryMatch && method === "GET") {
-        const agentId = apiAISummaryMatch[1];
+        const agentId = apiAISummaryMatch[1]!;
         const record = registry.get(agentId);
         if (!record) return json({ error: "Not found" }, 404);
         if (!aiSummary.isAvailable()) {
@@ -142,7 +148,7 @@ export function startAPIServer(): void {
 
       // Regenerate AI summary (DELETE to bust cache, then GET again)
       if (apiAISummaryMatch && method === "DELETE") {
-        const agentId = apiAISummaryMatch[1];
+        const agentId = apiAISummaryMatch[1]!;
         aiSummary.invalidate(agentId);
         return json({ invalidated: true });
       }
@@ -150,7 +156,7 @@ export function startAPIServer(): void {
       // Artifacts — files created/modified in the agent workspace
       const artifactsMatch = pathname.match(/^\/api\/agents\/([^/]+)\/artifacts$/);
       if (artifactsMatch && method === "GET") {
-        const agentId = artifactsMatch[1];
+        const agentId = artifactsMatch[1]!;
         const record = registry.get(agentId);
         if (!record) return json({ error: "Not found" }, 404);
         return handleGetArtifacts(record.workspacePath);
@@ -159,27 +165,18 @@ export function startAPIServer(): void {
       // Resume a stopped agent (reuses its workspace + last state.json checkpoint)
       const resumeMatch = pathname.match(/^\/api\/agents\/([^/]+)\/resume$/);
       if (resumeMatch && method === "POST") {
-        const agentId = resumeMatch[1];
-        const stopped = registry.get(agentId);
-        if (!stopped) return json({ error: "Not found" }, 404);
-        if (stopped.status === "running") return json({ error: "Agent is already running" }, 400);
-        const record = await startRun({ task: stopped.task, resumeId: agentId });
-        return json({ id: record.id, status: record.status, resumed: true });
+        return handleResumeAgent(resumeMatch[1]!);
       }
 
       // Replay a run — same task but fresh workspace and state
       const replayMatch = pathname.match(/^\/api\/agents\/([^/]+)\/replay$/);
       if (replayMatch && method === "POST") {
-        const agentId = replayMatch[1];
-        const original = registry.get(agentId);
-        if (!original) return json({ error: "Not found" }, 404);
-        const record = await startRun({ task: original.task });
-        return json({ id: record.id, status: record.status, replayed: true, originalId: agentId });
+        return handleReplayAgent(replayMatch[1]!);
       }
 
       const apiAgentMatch = pathname.match(/^\/api\/agents\/([^/]+)$/);
       if (apiAgentMatch) {
-        const agentId = apiAgentMatch[1];
+        const agentId = apiAgentMatch[1]!;
 
         if (method === "GET") {
           const record = registry.get(agentId);
@@ -337,6 +334,21 @@ async function handleSendMessage(agentId: string, req: Request): Promise<Respons
   registry.broadcast(agentId, { type: "user_message", text, ts: Date.now() });
 
   return json({ delivered: true });
+}
+
+async function handleResumeAgent(agentId: string): Promise<Response> {
+  const stopped = registry.get(agentId);
+  if (!stopped) return json({ error: "Not found" }, 404);
+  if (stopped.status === "running") return json({ error: "Agent is already running" }, 400);
+  const record = await startRun({ task: stopped.task, resumeId: agentId });
+  return json({ id: record.id, status: record.status, resumed: true });
+}
+
+async function handleReplayAgent(agentId: string): Promise<Response> {
+  const original = registry.get(agentId);
+  if (!original) return json({ error: "Not found" }, 404);
+  const record = await startRun({ task: original.task });
+  return json({ id: record.id, status: record.status, replayed: true, originalId: agentId });
 }
 
 async function handleGetArtifacts(workspacePath: string): Promise<Response> {

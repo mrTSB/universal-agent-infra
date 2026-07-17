@@ -63,6 +63,62 @@ class Runtime:
         response = self._client._req("POST", "/api/agents", json=body).json()
         return Run(_AgentModel.from_dict(response).id, self._client)
 
+    def pursue(self, agent: "Agent", objective: "Objective") -> "ObjectiveRun":  # type: ignore[name-defined]
+        """
+        Start a durable objective on the Mobius runtime.
+
+        Unlike run(), pursue() advances through bounded wake cycles, sleeps without
+        consuming tokens, resumes on events, and survives server restarts.
+        """
+        from .objective import ObjectiveRun
+
+        agent._sync_tools()
+        body = objective.to_dict()
+        budget = dict(body.get("budget", {}))
+        if agent.max_cost is not None and "maxCostUsd" not in budget:
+            budget["maxCostUsd"] = agent.max_cost
+        if agent.max_steps is not None and "maxTurnsPerCycle" not in budget:
+            budget["maxTurnsPerCycle"] = agent.max_steps
+        if budget:
+            body["budget"] = budget
+        if agent.policy is not None and "policy" not in body:
+            body["policy"] = agent.policy.to_dict()
+        if agent.memory is not None and "memory" not in body:
+            body["memory"] = agent.memory.to_dict()
+
+        fallback = agent.fallback_model
+        if fallback is None and len(agent.models) > 1:
+            fallback = agent.models[1]
+        agent_definition = {
+            "name": agent.name,
+            "model": agent.models[0] if agent.models else None,
+            "fallbackModel": fallback,
+            "systemPrompt": agent.system_prompt,
+            "tools": [tool.name for tool in agent.tools],
+            "subAgents": agent._sub_agents_dict(),
+        }
+        body["agent"] = {
+            key: value for key, value in agent_definition.items() if value is not None
+        }
+        response = self._client.create_objective(body)
+        return ObjectiveRun(response["id"], self._client)
+
+    def get_objective(self, objective_id: str) -> "ObjectiveRun":  # type: ignore[name-defined]
+        """Get a handle to an existing durable objective."""
+        from .objective import ObjectiveRun
+        return ObjectiveRun(objective_id, self._client)
+
+    def list_objectives(
+        self,
+        statuses: Optional[List[str]] = None,
+    ) -> List["ObjectiveRun"]:  # type: ignore[name-defined]
+        """List durable objective handles, optionally filtered by status."""
+        from .objective import ObjectiveRun
+        return [
+            ObjectiveRun(item["id"], self._client)
+            for item in self._client.list_objectives(statuses)
+        ]
+
     def batch(
         self,
         agent: "Agent",

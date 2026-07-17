@@ -95,12 +95,14 @@ export function update(
 ): CustomTool | null {
   const idx = _tools.findIndex((t) => t.id === id);
   if (idx === -1) return null;
-  if (patch.name && patch.name !== _tools[idx].name && getByName(patch.name)) {
+  const current = _tools[idx]!;
+  if (patch.name && patch.name !== current.name && getByName(patch.name)) {
     throw new Error(`A tool named "${patch.name}" already exists`);
   }
-  _tools[idx] = { ..._tools[idx], ...patch, updatedAt: new Date().toISOString() };
+  const updated: CustomTool = { ...current, ...patch, updatedAt: new Date().toISOString() };
+  _tools[idx] = updated;
   persist();
-  return _tools[idx];
+  return updated;
 }
 
 export function remove(id: string): boolean {

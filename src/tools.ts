@@ -3,6 +3,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { z } from "zod";
 import type { CustomTool, HttpExecutor, ShellExecutor } from "./tool-registry.ts";
+import type {
+  CycleTransition,
+  MemoryKind,
+  StepStatus,
+  ToolAuthorization,
+} from "./mobius-types.ts";
 
 const GUIDE_PATH = path.resolve(import.meta.dirname, "..", "SOFTWARE_ENGINEERING_GUIDE.md");
 
@@ -15,6 +21,28 @@ type SupportServerOpts = {
   checkReplies: () => Promise<string[]>;
   customTools?: CustomTool[];
   agentCwd?: string;
+  transition?: (transition: CycleTransition) => void | Promise<void>;
+  remember?: (input: {
+    kind: MemoryKind;
+    content: string;
+    confidence?: number;
+    provenance?: Record<string, unknown>;
+  }) => void | Promise<void>;
+  updatePlanStep?: (input: {
+    id?: string;
+    title?: string;
+    description?: string;
+    status?: StepStatus;
+    result?: string;
+    evidence?: unknown[];
+  }) => string | Promise<string>;
+  authorizeAction?: (
+    tool: string,
+    input: Record<string, unknown>,
+    toolUseId?: string,
+  ) => ToolAuthorization | Promise<ToolAuthorization>;
+  completeAction?: (actionId: string, output: unknown) => void | Promise<void>;
+  failAction?: (actionId: string, error: string) => void | Promise<void>;
 };
 
 /**
@@ -108,12 +136,104 @@ export function createSupportServer(opts: SupportServerOpts) {
         }
       }
     ),
+
+    tool(
+      "continue_objective",
+      "Finish this bounded work cycle and immediately schedule another cycle because useful work remains. Do not use this while waiting for time, an event, or a human.",
+      { reason: z.string().optional().describe("Why another cycle is useful") },
+      async ({ reason }) => {
+        await opts.transition?.({ type: "continue", reason });
+        return { content: [{ type: "text" as const, text: "Objective will continue in a fresh bounded cycle." }] };
+      }
+    ),
+
+    tool(
+      "wait_for_event",
+      "Suspend the objective without spending model tokens. Wake it at a future ISO time, when a named event arrives, or when an operator resumes it.",
+      {
+        reason: z.string().describe("What the objective is waiting for"),
+        wake_at: z.string().optional().describe("Optional ISO-8601 wake time"),
+        event_type: z.string().optional().describe("Optional event type that should wake the objective"),
+      },
+      async ({ reason, wake_at, event_type }) => {
+        await opts.transition?.({ type: "wait", reason, wakeAt: wake_at, eventType: event_type });
+        return { content: [{ type: "text" as const, text: "Objective will become dormant after this cycle." }] };
+      }
+    ),
+
+    tool(
+      "complete_objective",
+      "Mark the objective complete only after every success criterion has been verified with evidence.",
+      {
+        result: z.string().describe("Concise final result"),
+        evidence: z.array(z.unknown()).optional().describe("Evidence supporting completion"),
+      },
+      async ({ result, evidence }) => {
+        await opts.transition?.({ type: "complete", result, evidence });
+        return { content: [{ type: "text" as const, text: "Objective will be marked completed after this cycle." }] };
+      }
+    ),
+
+    tool(
+      "block_objective",
+      "Block the objective when progress requires a decision or resource that cannot be obtained automatically.",
+      { reason: z.string().describe("The concrete blocker and what would unblock it") },
+      async ({ reason }) => {
+        await opts.transition?.({ type: "block", reason });
+        return { content: [{ type: "text" as const, text: "Objective will be marked blocked after this cycle." }] };
+      }
+    ),
+
+    tool(
+      "fail_objective",
+      "Fail the objective when it cannot safely or correctly continue. Mark transient failures retryable.",
+      {
+        error: z.string().describe("Failure reason"),
+        retryable: z.boolean().optional().describe("Whether the runtime should retry with backoff"),
+      },
+      async ({ error, retryable }) => {
+        await opts.transition?.({ type: "fail", error, retryable });
+        return { content: [{ type: "text" as const, text: "Failure transition recorded." }] };
+      }
+    ),
+
+    tool(
+      "remember",
+      "Persist a useful memory with provenance. Store durable facts as semantic, past experience as episodic, current state as working, and reusable methods as procedural.",
+      {
+        kind: z.enum(["working", "episodic", "semantic", "procedural"]),
+        content: z.string(),
+        confidence: z.number().min(0).max(1).optional(),
+        provenance: z.record(z.string(), z.unknown()).optional(),
+      },
+      async ({ kind, content, confidence, provenance }) => {
+        await opts.remember?.({ kind, content, confidence, provenance });
+        return { content: [{ type: "text" as const, text: "Memory persisted." }] };
+      }
+    ),
+
+    tool(
+      "update_plan_step",
+      "Create or update a durable plan step so future cycles and sub-agents share the same work graph.",
+      {
+        id: z.string().optional(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        status: z.enum(["pending", "ready", "running", "waiting", "blocked", "completed", "failed", "cancelled"]).optional(),
+        result: z.string().optional(),
+        evidence: z.array(z.unknown()).optional(),
+      },
+      async (input) => {
+        const id = await opts.updatePlanStep?.(input);
+        return { content: [{ type: "text" as const, text: id ? `Plan step saved: ${id}` : "Plan storage is unavailable." }] };
+      }
+    ),
   ];
 
   // Register each enabled custom tool
   const enabled = (opts.customTools ?? []).filter((t) => t.enabled);
   const customEntries = enabled.map((ct) =>
-    tool(ct.name, ct.description, buildZodShape(ct), makeHandler(ct, opts.agentCwd ?? "."))
+    tool(ct.name, ct.description, buildZodShape(ct), makeHandler(ct, opts.agentCwd ?? ".", opts))
   );
 
   return createSdkMcpServer({
@@ -144,7 +264,7 @@ function buildZodShape(ct: CustomTool): Record<string, z.ZodTypeAny> {
         t = z.array(z.unknown());
         break;
       case "object":
-        t = z.record(z.unknown());
+        t = z.record(z.string(), z.unknown());
         break;
       default:
         t = z.string();
@@ -161,19 +281,42 @@ function buildZodShape(ct: CustomTool): Record<string, z.ZodTypeAny> {
 // Executor handlers
 // ---------------------------------------------------------------------------
 
-function makeHandler(ct: CustomTool, agentCwd: string) {
+function makeHandler(ct: CustomTool, agentCwd: string, opts: SupportServerOpts) {
   return async (input: Record<string, unknown>) => {
+    let actionId: string | undefined;
     try {
+      if (opts.authorizeAction) {
+        const authorization = await opts.authorizeAction(ct.name, input);
+        actionId = authorization.actionId;
+        if (authorization.behavior === "deny") {
+          return { content: [{ type: "text" as const, text: `Tool denied: ${authorization.reason}` }] };
+        }
+        if (authorization.behavior === "approval") {
+          await opts.transition?.({
+            type: "wait",
+            reason: `Waiting for approval ${authorization.approval.id}: ${authorization.approval.summary}`,
+            eventType: `approval.${authorization.approval.id}.resolved`,
+          });
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Approval required (${authorization.approval.id}). The objective will wait without consuming tokens.`,
+            }],
+          };
+        }
+      }
       const output =
         ct.executor.type === "http"
           ? await runHttp(ct.executor, input)
           : await runShell(ct.executor, input, agentCwd);
 
       console.log(`[custom-tool:${ct.name}] success`);
+      if (actionId) await opts.completeAction?.(actionId, output);
       return { content: [{ type: "text" as const, text: output }] };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[custom-tool:${ct.name}] error: ${msg}`);
+      if (actionId) await opts.failAction?.(actionId, msg);
       return { content: [{ type: "text" as const, text: `Tool error: ${msg}` }] };
     }
   };

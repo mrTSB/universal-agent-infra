@@ -48,7 +48,9 @@ class ConfigStatus:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "ConfigStatus":
-        return cls(keys=d)
+        # The server wraps key availability in a `keys` object. Accept the
+        # unwrapped shape as well for compatibility with older servers.
+        return cls(keys=d.get("keys", d))
 
 
 @dataclass

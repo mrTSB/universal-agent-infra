@@ -6,6 +6,12 @@ import { logEvent } from "./logging.ts";
 import * as registry from "./agent-registry.ts";
 import { invalidate as invalidateAISummary } from "./ai-summary.ts";
 import * as toolRegistry from "./tool-registry.ts";
+import type {
+  CycleResult,
+  MemoryKind,
+  StepStatus,
+  ToolAuthorization,
+} from "./mobius-types.ts";
 
 // ---------------------------------------------------------------------------
 // SDK event → UI broadcast
@@ -62,7 +68,12 @@ export type StartRunOptions = {
   /** Optional task description shown in the UI and injected into initial message. */
   task?: string;
   /** Optional sub-agent definitions for swarm runs. */
-  subAgents?: Record<string, { description: string; prompt: string; model?: string }>;
+  subAgents?: Record<string, {
+    description: string;
+    prompt: string;
+    model?: string;
+    tools?: string[];
+  }>;
   /**
    * Resume a previously stopped run.
    * If provided, this exact ID is reused so the existing workspace and state.json
@@ -74,6 +85,40 @@ export type StartRunOptions = {
    * this threshold is crossed. Takes effect server-side — not just a prompt hint.
    */
   maxCostUsd?: number;
+  /** Override the default model and fallback model for this definition. */
+  model?: string;
+  fallbackModel?: string;
+  /** SDK-native hard limits for each bounded wake cycle. */
+  maxTurns?: number;
+  maxBudgetUsd?: number;
+  /** Customize the definition and wake-cycle prompt without forking the runtime. */
+  systemPrompt?: string;
+  initialMessage?: string;
+  /** Limit this run to the named registered custom tools. */
+  tools?: string[];
+  onCycleComplete?: (result: CycleResult) => void | Promise<void>;
+  onFailure?: (error: Error) => void | Promise<void>;
+  onMemory?: (input: {
+    kind: MemoryKind;
+    content: string;
+    confidence?: number;
+    provenance?: Record<string, unknown>;
+  }) => void | Promise<void>;
+  onPlanStep?: (input: {
+    id?: string;
+    title?: string;
+    description?: string;
+    status?: StepStatus;
+    result?: string;
+    evidence?: unknown[];
+  }) => string | Promise<string>;
+  authorizeAction?: (
+    tool: string,
+    input: Record<string, unknown>,
+    toolUseId?: string,
+  ) => ToolAuthorization | Promise<ToolAuthorization>;
+  completeAction?: (actionId: string, output: unknown) => void | Promise<void>;
+  failAction?: (actionId: string, error: string) => void | Promise<void>;
 };
 
 /**
@@ -111,23 +156,35 @@ export async function startRun(opts: StartRunOptions): Promise<registry.AgentRec
   const workspacePath = await storage.ensureWorkspace();
   record.workspacePath = workspacePath;
 
-  const initialMessage = task
+  const initialMessage = opts.initialMessage ?? (task
     ? `${INITIAL_MESSAGE}\n\nYour specific task for this session:\n${task}`
-    : INITIAL_MESSAGE;
+    : INITIAL_MESSAGE);
 
   // Track the last cumulative cost the SDK reported so we can compute per-turn deltas.
   // The SDK's total_cost_usd is cumulative since query() was called — NOT per-turn.
   let lastReportedCostUsd = 0;
 
-  const customTools = toolRegistry.list();
+  const customTools = toolRegistry.list().filter(
+    (customTool) => opts.tools === undefined || opts.tools.includes(customTool.name),
+  );
 
   const handle = createAgent({
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt: opts.systemPrompt ?? SYSTEM_PROMPT,
     cwd: workspacePath,
     initialMessage,
     previousState,
+    resumeSessionId: previousState?.sessionId || undefined,
+    model: opts.model,
+    fallbackModel: opts.fallbackModel,
+    maxTurns: opts.maxTurns,
+    maxBudgetUsd: opts.maxBudgetUsd ?? opts.maxCostUsd,
     customTools,
     subAgents: opts.subAgents,
+    onMemory: opts.onMemory,
+    onPlanStep: opts.onPlanStep,
+    authorizeAction: opts.authorizeAction,
+    completeAction: opts.completeAction,
+    failAction: opts.failAction,
 
     pingHuman: async (message) => {
       registry.broadcast(id, { type: "ping", message, ts: Date.now() });
@@ -189,6 +246,24 @@ export async function startRun(opts: StartRunOptions): Promise<registry.AgentRec
         stopRun(id);
       }
     },
+
+    onCycleComplete: async (result) => {
+      const rec = registry.get(id);
+      if (rec) {
+        rec.handle = null;
+        rec.status = cycleStatus(result);
+      }
+      await opts.onCycleComplete?.(result);
+    },
+
+    onFailure: async (error) => {
+      const rec = registry.get(id);
+      if (rec) {
+        rec.handle = null;
+        rec.status = "failed";
+      }
+      await opts.onFailure?.(error);
+    },
   });
 
   record.handle = handle;
@@ -196,6 +271,33 @@ export async function startRun(opts: StartRunOptions): Promise<registry.AgentRec
 
   console.log(`[manager] Agent ${id.slice(0, 8)} started — task: ${task.slice(0, 60)}`);
   return record;
+}
+
+/** Execute one wake cycle and resolve only after it enters a durable transition. */
+export function runBoundedCycle(opts: StartRunOptions): Promise<CycleResult> {
+  return new Promise<CycleResult>((resolve, reject) => {
+    void startRun({
+      ...opts,
+      onCycleComplete: async (result) => {
+        await opts.onCycleComplete?.(result);
+        resolve(result);
+      },
+      onFailure: async (error) => {
+        await opts.onFailure?.(error);
+        reject(error);
+      },
+    }).catch(reject);
+  });
+}
+
+function cycleStatus(result: CycleResult): registry.AgentStatus {
+  switch (result.transition.type) {
+    case "continue": return "waiting";
+    case "wait": return "waiting";
+    case "block": return "blocked";
+    case "complete": return "completed";
+    case "fail": return "failed";
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,12 @@
 import requests
 from typing import Any, Dict, List, Optional
 
-from .exceptions import AgentNotFoundError, AeonError, ServerNotRunningError
+from .exceptions import (
+    AgentNotFoundError,
+    AeonError,
+    ObjectiveNotFoundError,
+    ServerNotRunningError,
+)
 from .models import Agent, AgentEvent, ConfigStatus, CustomTool, ToolInputSchema
 
 
@@ -39,6 +44,8 @@ class AeonClient:
         except requests.exceptions.ConnectionError:
             raise ServerNotRunningError()
         if r.status_code == 404:
+            if "/objectives/" in path:
+                raise ObjectiveNotFoundError(f"Not found: {path}")
             raise AgentNotFoundError(f"Not found: {path}")
         r.raise_for_status()
         return r
@@ -63,7 +70,7 @@ class AeonClient:
 
     def send_message(self, agent_id: str, message: str) -> dict:
         """Inject a human message into the agent's conversation."""
-        return self._req("POST", f"/api/agents/{agent_id}", json={"message": message}).json()
+        return self._req("POST", f"/api/agents/{agent_id}", json={"text": message}).json()
 
     # ── Analytics & Summary ──────────────────────────────────────────────────
 
@@ -144,6 +151,74 @@ class AeonClient:
     def toggle_tool(self, tool_id: str) -> CustomTool:
         """Toggle enabled/disabled state of a tool."""
         return CustomTool.from_dict(self._req("POST", f"/api/tools/{tool_id}/toggle").json())
+
+    # ── Durable objectives ───────────────────────────────────────────────────
+
+    def create_objective(self, definition: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a durable objective from a fully customizable definition."""
+        return self._req("POST", "/api/v1/objectives", json=definition).json()
+
+    def list_objectives(self, statuses: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        params = {"status": ",".join(statuses)} if statuses else None
+        return self._req("GET", "/api/v1/objectives", params=params).json()
+
+    def get_objective(self, objective_id: str) -> Dict[str, Any]:
+        return self._req("GET", f"/api/v1/objectives/{objective_id}").json()
+
+    def emit_objective_event(
+        self,
+        objective_id: str,
+        event_type: str,
+        payload: Dict[str, Any],
+        *,
+        source: str = "sdk",
+        dedupe_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return self._req("POST", f"/api/v1/objectives/{objective_id}/events", json={
+            "type": event_type,
+            "payload": payload,
+            "source": source,
+            "dedupeKey": dedupe_key,
+        }).json()
+
+    def control_objective(
+        self,
+        objective_id: str,
+        control: str,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if control not in ("pause", "resume", "cancel"):
+            raise ValueError("control must be pause, resume, or cancel")
+        return self._req(
+            "POST", f"/api/v1/objectives/{objective_id}/{control}", json={"reason": reason}
+        ).json()
+
+    def get_objective_resource(
+        self,
+        objective_id: str,
+        resource: str,
+    ) -> List[Dict[str, Any]]:
+        valid = ("plan", "events", "memories", "actions", "outcomes", "approvals")
+        if resource not in valid:
+            raise ValueError(f"resource must be one of: {', '.join(valid)}")
+        return self._req("GET", f"/api/v1/objectives/{objective_id}/{resource}").json()
+
+    def resolve_approval(
+        self,
+        objective_id: str,
+        approval_id: str,
+        status: str,
+        *,
+        resolved_by: str = "sdk",
+        note: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if status not in ("approved", "rejected"):
+            raise ValueError("status must be approved or rejected")
+        return self._req(
+            "POST",
+            f"/api/v1/objectives/{objective_id}/approvals/{approval_id}/resolve",
+            json={"status": status, "resolvedBy": resolved_by, "note": note},
+        ).json()
 
     # ── Streaming ────────────────────────────────────────────────────────────
 

@@ -10,11 +10,14 @@ Convenience methods like agent.run() delegate to a default Runtime internally.
 """
 
 import os
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional, Union
 
 from .client import AeonClient
 from .models import Agent as _AgentModel, AgentEvent
 from .tools import Tool
+
+if TYPE_CHECKING:
+    from .objective import MemoryConfig, Objective, ObjectiveRun, Policy
 
 # ── Model name constants ──────────────────────────────────────────────────────
 
@@ -220,10 +223,13 @@ class Agent:
 
     Args:
         name:      Display name, prepended to the task for context.
-        models:    Allowed model names (informational; server uses CLAUDE_MODEL env var).
+        models:    Primary model followed by optional fallback model.
         tools:     HttpTool / ShellTool instances synced to the server on run().
         max_cost:  Optional USD budget constraint injected into the task prompt.
         max_steps: Optional turn limit injected into the task prompt.
+        system_prompt: Custom instructions appended to Aeon's base operating rules.
+        policy:    Default tool/risk/approval policy for durable objectives.
+        memory:    Default durable memory configuration for objectives.
         server:    Aeon server URL. Defaults to AEON_SERVER or localhost:3000.
     """
 
@@ -234,6 +240,10 @@ class Agent:
         tools: Optional[List[Tool]] = None,
         max_cost: Optional[float] = None,
         max_steps: Optional[int] = None,
+        system_prompt: Optional[str] = None,
+        fallback_model: Optional[str] = None,
+        policy: Optional["Policy"] = None,
+        memory: Optional["MemoryConfig"] = None,
         server: Optional[str] = None,
     ) -> None:
         self.name = name
@@ -241,6 +251,10 @@ class Agent:
         self.tools = tools or []
         self.max_cost = max_cost
         self.max_steps = max_steps
+        self.system_prompt = system_prompt
+        self.fallback_model = fallback_model
+        self.policy = policy
+        self.memory = memory
         self._server = server or os.environ.get("AEON_SERVER", "http://localhost:3000")
         self._client = AeonClient(base_url=self._server)
 
@@ -260,6 +274,11 @@ class Agent:
         Identical to run() — use when semantically spawning a sub-task.
         """
         return self.run(task)
+
+    def pursue(self, objective: "Objective") -> "ObjectiveRun":
+        """Start a durable, event-driven objective using this agent definition."""
+        from .runtime import Runtime
+        return Runtime(server=self._server).pursue(self, objective)
 
     def resume(self, run_id: str) -> "Run":
         """

@@ -69,7 +69,7 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
       c(C.cyan, a.id.slice(0, 8)),
       fmtStatus(a.status),
       String(a.turnCount || "-"),
-      fmtCost(a.totalCostUsd),
+      fmtCost(a.totalCostUsd ?? 0),
       fmtTs(a.createdAt),
       a.task.slice(0, 55) + (a.task.length > 55 ? "…" : ""),
     ]);
@@ -92,7 +92,7 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
     console.log(`${c(C.dim, "task:")}      ${a.task}`);
     console.log(`${c(C.dim, "status:")}    ${fmtStatus(a.status)}`);
     console.log(`${c(C.dim, "turns:")}     ${a.turnCount ?? "-"}`);
-    console.log(`${c(C.dim, "cost:")}      ${fmtCost(a.totalCostUsd)}`);
+    console.log(`${c(C.dim, "cost:")}      ${fmtCost(a.totalCostUsd ?? 0)}`);
     console.log(`${c(C.dim, "created:")}   ${fmtTs(a.createdAt)}`);
     console.log(`${c(C.dim, "workspace:")} ${a.workspacePath ?? "-"}`);
   },
@@ -263,10 +263,10 @@ function printTable(headers: string[], rows: string[][]): void {
   );
   const pad = (s: string, w: number) => s + " ".repeat(Math.max(0, w - stripAnsi(s).length));
   const sep = widths.map(w => "─".repeat(w)).join("─ ");
-  console.log(c(C.dim, headers.map((h, i) => pad(h, widths[i])).join("  ")));
+  console.log(c(C.dim, headers.map((h, i) => pad(h, widths[i]!)).join("  ")));
   console.log(c(C.dim, sep));
   for (const row of rows) {
-    console.log(row.map((cell, i) => pad(cell, widths[i])).join("  "));
+    console.log(row.map((cell, i) => pad(cell, widths[i]!)).join("  "));
   }
 }
 

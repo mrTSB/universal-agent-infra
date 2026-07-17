@@ -4,7 +4,15 @@ import type { ServerWebSocket } from "bun";
 // Types
 // ---------------------------------------------------------------------------
 
-export type AgentStatus = "starting" | "running" | "stopped";
+export type AgentStatus =
+  | "starting"
+  | "running"
+  | "waiting"
+  | "blocked"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "stopped";
 
 export type AgentHandle = {
   injectMessage: (source: "ui" | "cli", text: string) => void;

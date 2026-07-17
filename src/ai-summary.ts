@@ -87,7 +87,7 @@ export function extractPhaseContexts(analyticsData: unknown): AnalyticsPhase[] {
     }
     const total = Object.values(counts).reduce((a,b)=>a+b,0);
     if (total === 0) return turn.hasThinking ? "reasoning" : "idle";
-    return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+    return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0]?.[0] ?? "other";
   }
 
   // Group turns into phases
@@ -258,7 +258,7 @@ function parseResponse(raw: string): { overall: string; phases: PhaseSummary[] }
  * Safe to call multiple times — deduplicates automatically.
  */
 export function requestSummary(agentId: string, analyticsData: unknown): void {
-  if (!OPENROUTER_KEY) return;
+  if (!getOpenRouterKey()) return;
   const existing = cache.get(agentId);
   if (existing?.status === "ready" || existing?.status === "generating") return;
 

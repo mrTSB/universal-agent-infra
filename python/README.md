@@ -1,11 +1,11 @@
-# aeon-agents — Python SDK
+# aeon-agents - Python SDK
 
 > **Requires the Aeon server running.**
-> Start it: `bun run agent` from the project root.
+> Start it: `pnpm run agent` from the project root.
 > Override server: `AEON_SERVER=http://...`
 
 ```bash
-cd python && pip install -e .
+python -m pip install ./python
 ```
 
 ---
@@ -20,6 +20,108 @@ cd python && pip install -e .
 | `Runtime` | Execution — start, pause, resume, replay, list runs |
 | `Swarm` | A multi-agent team (subclass of Agent) |
 | `SubAgent` | One role within a Swarm |
+| `Objective` | Durable outcome, context, criteria, playbook, and budgets |
+| `ObjectiveRun` | Event-driven control, state ledgers, and approvals |
+| `Policy` | Tool access, risk, approval gates, containment, and retries |
+
+---
+
+## Infinite-Horizon Objectives
+
+Use `pursue()` for work that must survive process restarts, wait without spending
+tokens, react to external events, or require durable plans and approvals.
+
+```python
+from aeon import (
+    Agent, Budget, MemoryConfig, Objective, Playbook, PlaybookStep,
+    Policy, RetryPolicy, Runtime,
+)
+from aeon.tools import HttpTool
+
+agent = Agent(
+    name="general-operator",
+    models=["claude-sonnet-4-6", "claude-haiku-4-5"],
+    system_prompt="Use primary evidence and prefer reversible actions.",
+    tools=[HttpTool(
+        name="inspect_system",
+        description="Read the current external system state.",
+        url="https://example.test/state",
+        method="GET",
+    )],
+    policy=Policy(
+        denied_tools=["Bash"],
+        approval_required_tools=["publish_change"],
+        tool_risk_levels={"publish_change": "critical"},
+        approval_risk_level="high",
+        retry=RetryPolicy(max_attempts=4, initial_delay_ms=1000),
+    ),
+    memory=MemoryConfig(max_context_items=40),
+)
+
+objective = Objective(
+    goal="Keep the target system healthy and publish verified improvements.",
+    context="React to health.changed and deployment.finished events.",
+    success_criteria=["Health is verified", "Every change has evidence"],
+    budget=Budget(
+        max_cost_usd=25,
+        max_cycles=10_000,
+        max_turns_per_cycle=20,
+        max_tool_calls=2_000,
+    ),
+    playbook=Playbook(
+        name="verify-and-improve",
+        version="1",
+        steps=[
+            PlaybookStep("Observe current state"),
+            PlaybookStep("Choose the smallest safe action"),
+            PlaybookStep("Verify the outcome"),
+        ],
+    ),
+    metadata={"owner": "platform"},
+)
+
+run = agent.pursue(objective)  # Runtime().pursue(agent, objective) also works
+```
+
+Each wake performs one bounded Mobius cycle and exits through `continue`, `wait`,
+`block`, `complete`, or `fail`. Waiting objectives are dormant and consume no
+model tokens.
+
+### Events and control
+
+```python
+run.emit(
+    "health.changed",
+    {"service": "api", "healthy": False},
+    dedupe_key="health-api-1042",
+)
+
+run.pause("Maintenance window")
+run.resume()
+run.cancel("Objective retired")
+
+snapshot = run.snapshot()
+idle = run.wait_until_idle(timeout=120)
+terminal = run.wait(timeout=3600)
+```
+
+### Durable state and approvals
+
+```python
+run.plan()       # durable work graph
+run.events()     # wake/event journal
+run.memories()   # working, episodic, semantic, and procedural memory
+run.actions()    # policy and idempotency-aware tool ledger
+run.outcomes()   # measured results and evidence
+
+for approval in run.approvals(pending_only=True):
+    run.approve(approval["id"], note="Reviewed by release owner")
+    # or run.reject(approval["id"], note="Unsafe during freeze")
+```
+
+`Runtime.get_objective(id)` reconnects after a client or server restart.
+`Runtime.list_objectives(statuses=["waiting", "blocked"])` lists durable work
+independently from legacy one-off runs.
 
 ---
 
@@ -31,7 +133,7 @@ from aeon.tools import HttpTool, ShellTool
 
 agent = Agent(
     name="builder",
-    models=[SONNET, OPUS],          # informational; server uses CLAUDE_MODEL env var
+    models=[SONNET, OPUS],          # primary model followed by fallback
     tools=[
         HttpTool(
             name="search_db",
@@ -254,7 +356,7 @@ OPUS    # "claude-opus-4-7"
 ## Exceptions
 
 ```python
-from aeon import ServerNotRunningError, AgentNotFoundError
+from aeon import ServerNotRunningError, AgentNotFoundError, ObjectiveNotFoundError
 
 try:
     run = agent.run(task)
@@ -262,7 +364,35 @@ except ServerNotRunningError:
     print("Start the server: bun run agent")
 except AgentNotFoundError:
     print("Run ID not found")
+except ObjectiveNotFoundError:
+    print("Objective ID not found")
 ```
+
+---
+
+## End-to-end tests
+
+From the repository root, run the installed-SDK contract scenario:
+
+```bash
+pnpm test:sdk
+```
+
+This creates a clean virtual environment, installs `python/` with `pip` (not
+editable), and runs realistic SDK workflows against a local HTTP test server:
+tool registration, task execution, steering, waiting, inspection, resume,
+replay, a swarm run, and a durable objective with a playbook, event wakeup,
+memory/action inspection, and approval resolution. It does not use API credentials.
+
+To also prove a model-backed agent can complete a real run against an already
+running and configured Aeon server:
+
+```bash
+AEON_SERVER=http://localhost:3000 pnpm test:sdk:live
+```
+
+The live smoke test starts one small agent run and may incur API cost. Its
+timeout can be changed with `AEON_E2E_TIMEOUT` (default: 180 seconds).
 
 ---
 
@@ -287,6 +417,7 @@ tools  = client.list_tools()
 python/aeon/
   __init__.py    exports
   agent.py       Agent, Task, Run + model constants
+  objective.py   Objective, ObjectiveRun, budgets, policies, memory, playbooks
   runtime.py     Runtime
   swarm.py       Swarm, SubAgent
   tools.py       HttpTool, ShellTool

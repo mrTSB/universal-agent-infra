@@ -7,7 +7,11 @@
     "agent": "bun run index.ts",
     "agent:safe": "./modal/run -- bun run agent",
     "modal:run": "./modal/run",
-    "cli": "bun run src/cli-main.ts"
+    "test": "bun test src/mobius-store.test.ts src/mobius-runtime.test.ts src/objective-api.test.ts",
+    "test:runtime": "bun test src/mobius-store.test.ts src/mobius-runtime.test.ts src/objective-api.test.ts",
+    "cli": "bun run src/cli-main.ts",
+    "test:sdk": "uv run python tests/test_sdk_install_e2e.py",
+    "test:sdk:live": "AEON_E2E_LIVE=1 uv run python tests/test_sdk_install_e2e.py"
   },
   "devDependencies": {
     "@types/bun": "latest"

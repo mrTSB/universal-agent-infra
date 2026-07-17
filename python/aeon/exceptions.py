@@ -13,3 +13,7 @@ class ServerNotRunningError(AeonError):
 
 class AgentNotFoundError(AeonError):
     pass
+
+
+class ObjectiveNotFoundError(AeonError):
+    pass
