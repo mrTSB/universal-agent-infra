@@ -1,0 +1,8 @@
+/* Wide wordmark logos — make them read clearly in the navbar */
+nav-logo img {
+  height: 36px !important;
+  max-height: 36px !important;
+  width: auto !important;
+  max-width: min(220px, 40vw) !important;
+  object-fit: contain !important;
+}
