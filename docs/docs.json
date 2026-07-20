@@ -13,6 +13,9 @@
     "dark": "/logo/dark.png"
   },
   "favicon": "/logo/favicon.png",
+  "icons": {
+    "library": "lucide"
+  },
   "navigation": {
     "tabs": [
       {
@@ -64,7 +67,7 @@
         "groups": [
           {
             "group": "Python SDK",
-            "icon": "python",
+            "icon": "code",
             "pages": [
               "reference/sdk",
               "reference/objective-api",
