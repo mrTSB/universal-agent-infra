@@ -2,7 +2,7 @@
 title: "Installation"
 description: "Install the Aeon Python SDK and start the server."
 icon: "download"
-keywords: ["install", "pip", "aeon-agents", "setup"]
+keywords: ["install", "pip", "aeon-sdk", "setup"]
 ---
 
 Aeon has two parts: a durable agent server, and a Python SDK that talks to it.
@@ -11,7 +11,7 @@ Aeon has two parts: a durable agent server, and a Python SDK that talks to it.
 
 <Columns cols={3}>
   <Card title="Python 3.9+" icon="python">
-    Required for the `aeon-agents` SDK.
+    Required for the `aeon-sdk` package.
   </Card>
 
   <Card title="Node, pnpm, or Bun" icon="terminal">
@@ -27,13 +27,11 @@ Aeon has two parts: a durable agent server, and a Python SDK that talks to it.
 
 <Steps>
   <Step title="Install the Python SDK">
-    From the repository root:
-
     ```bash
-    python -m pip install ./python
+    python -m pip install aeon-sdk
     ```
 
-    The package name is `aeon-agents`; you import it as `aeon`:
+    The package name is `aeon-sdk`; you import it as `aeon`:
 
     ```python
     from aeon import Agent, Objective, Runtime
@@ -109,11 +107,19 @@ If `ANTHROPIC_API_KEY` is missing, server startup exits immediately. Old Vertex 
 
 ## Verify the install
 
+After installing, confirm the package imports correctly:
+
+```bash
+python -c "from aeon import Agent, Objective, Runtime; print('aeon-sdk ready')"
+```
+
+From this repository, maintainers can run the installed-SDK contract suite:
+
 ```bash
 pnpm test:sdk
 ```
 
-This creates a clean virtual environment, installs `python/` with pip, and runs SDK contract tests against a local HTTP test server. No API credentials are required.
+This creates a clean virtual environment, installs the local package non-editably with pip, and runs SDK contract tests against a local HTTP test server. No API credentials are required.
 
 For a live smoke test against a running, configured server:
 

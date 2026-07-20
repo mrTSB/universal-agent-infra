@@ -1,11 +1,11 @@
-# aeon-agents - Python SDK
+# aeon-sdk - Python SDK
 
 > **Requires the Aeon server running.**
 > Start it: `pnpm run agent` from the project root.
 > Override server: `AEON_SERVER=http://...`
 
 ```bash
-python -m pip install ./python
+python -m pip install aeon-sdk
 ```
 
 ---
@@ -197,7 +197,7 @@ task = Task(
     success_criteria=[                                    # optional
         "all tests pass",
         "README explains install and usage",
-        "pip install -e . works",
+        "pip install . works",
     ],
 )
 ```

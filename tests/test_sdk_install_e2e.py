@@ -393,7 +393,7 @@ def _installed_scenario(server: str) -> None:
     source_root = Path(os.environ["AEON_SOURCE_ROOT"]).resolve()
     installed_module = Path(aeon.__file__).resolve()
     assert source_root not in installed_module.parents, installed_module
-    assert version("aeon-agents") == aeon.__version__ == "0.1.0"
+    assert version("aeon-sdk") == aeon.__version__ == "0.1.0"
 
     client = AeonClient(server)
     assert client.get_config().keys == {
@@ -521,7 +521,7 @@ def _installed_scenario(server: str) -> None:
     swarm_run.stop()
 
     print(json.dumps({
-        "distribution": version("aeon-agents"),
+        "distribution": version("aeon-sdk"),
         "module": str(installed_module),
         "run_id": run.id,
         "status": result["status"],

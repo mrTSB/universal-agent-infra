@@ -65,7 +65,7 @@ bun run agent
 Install the Python SDK into any application:
 
 ```bash
-python -m pip install ./python
+python -m pip install aeon-sdk
 ```
 
 ```python
