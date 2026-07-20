@@ -1,14 +1,18 @@
 ---
-title: "Mobius architecture"
+title: "Wake cycles"
 description: "Bounded wake cycles for durable infinite-horizon agents."
-keywords: ["mobius", "wake cycle", "observe", "plan", "act", "verify", "durable"]
+keywords: ["wake cycle", "observe", "plan", "act", "verify", "durable", "infinite horizon"]
 ---
 
 Aeon separates a long-lived **objective** from the short-lived **model process** that advances it. An objective can exist for months or years, while each model wake is small, bounded, auditable, and replaceable.
 
+<Note>
+  This wake-cycle design is based on [Mobius](https://x.com/BhathalTanvir0/status/2023896499848114427), Tanvir Bhathal's TreeHacks infinite-horizon agent project.
+</Note>
+
 ## Control loop
 
-Each wake executes one Mobius cycle:
+Each wake executes one bounded cycle:
 
 <Steps>
   <Step title="Observe">
@@ -48,7 +52,7 @@ Terminal states are `completed`, `failed`, and `cancelled`. `waiting` and `block
 
 ## Durable kernel
 
-`MobiusStore` is a SQLite journal (WAL mode, foreign keys). It stores:
+`ObjectiveStore` is a SQLite journal (WAL mode, foreign keys). It stores:
 
 | Record | Purpose |
 | --- | --- |

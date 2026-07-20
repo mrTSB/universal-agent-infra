@@ -16,7 +16,7 @@ import {
   type RiskLevel,
   type RuntimeEvent,
   type StepStatus,
-} from "./mobius-types.ts";
+} from "./objective-types.ts";
 
 type Row = Record<string, unknown>;
 
@@ -33,7 +33,7 @@ function encode(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
-export class MobiusStore {
+export class ObjectiveStore {
   readonly db: Database;
 
   constructor(path = process.env["AEON_DB_PATH"] ?? resolve(".agents", "aeon.sqlite")) {

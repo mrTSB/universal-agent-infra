@@ -8,7 +8,7 @@ import type {
   MemoryKind,
   StepStatus,
   ToolAuthorization,
-} from "./mobius-types.ts";
+} from "./objective-types.ts";
 
 const GUIDE_PATH = path.resolve(import.meta.dirname, "..", "SOFTWARE_ENGINEERING_GUIDE.md");
 

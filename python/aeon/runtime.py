@@ -65,7 +65,7 @@ class Runtime:
 
     def pursue(self, agent: "Agent", objective: "Objective") -> "ObjectiveRun":  # type: ignore[name-defined]
         """
-        Start a durable objective on the Mobius runtime.
+        Start a durable objective on the durable objective runtime.
 
         Unlike run(), pursue() advances through bounded wake cycles, sleeps without
         consuming tokens, resumes on events, and survives server restarts.

@@ -1,4 +1,4 @@
-import { MobiusStore } from "./mobius-store.ts";
+import { ObjectiveStore } from "./objective-store.ts";
 import {
   DEFAULT_BUDGET,
   DEFAULT_RETRY,
@@ -7,20 +7,20 @@ import {
   type Objective,
   type ObjectiveInput,
   type RuntimeEvent,
-} from "./mobius-types.ts";
+} from "./objective-types.ts";
 
 export type CycleExecutor = (
   objective: Objective,
   events: RuntimeEvent[],
 ) => Promise<CycleResult>;
 
-export type MobiusRuntimeOptions = {
+export type ObjectiveRuntimeOptions = {
   pollIntervalMs?: number;
   leaseMs?: number;
   workerId?: string;
 };
 
-export class MobiusRuntime {
+export class ObjectiveRuntime {
   private readonly inFlight = new Set<string>();
   private readonly pollIntervalMs: number;
   private readonly leaseMs: number;
@@ -28,9 +28,9 @@ export class MobiusRuntime {
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
-    readonly store: MobiusStore,
+    readonly store: ObjectiveStore,
     private readonly executor: CycleExecutor,
-    options: MobiusRuntimeOptions = {},
+    options: ObjectiveRuntimeOptions = {},
   ) {
     this.pollIntervalMs = options.pollIntervalMs ?? 1_000;
     this.leaseMs = options.leaseMs ?? 5 * 60_000;
@@ -40,7 +40,7 @@ export class MobiusRuntime {
   start(): void {
     if (this.timer) return;
     const recovered = this.store.recoverInterrupted();
-    if (recovered) console.log(`[mobius] Recovered ${recovered} interrupted objective(s)`);
+    if (recovered) console.log(`[objective] Recovered ${recovered} interrupted objective(s)`);
     this.timer = setInterval(() => void this.tick(), this.pollIntervalMs);
     void this.tick();
   }
@@ -165,7 +165,7 @@ export class MobiusRuntime {
       }
 
       const events = this.store.pendingEvents(objectiveId);
-      this.store.appendEvent(objectiveId, "cycle.started", "mobius", {
+      this.store.appendEvent(objectiveId, "cycle.started", "runtime", {
         cycle: claimed.cycleCount,
         eventIds: events.map((event) => event.id),
       });
@@ -255,7 +255,7 @@ export class MobiusRuntime {
         });
         break;
     }
-    this.store.appendEvent(objective.id, `cycle.${transition.type}`, "mobius", {
+    this.store.appendEvent(objective.id, `cycle.${transition.type}`, "runtime", {
       cycle: objective.cycleCount,
       transition,
       summary: result.summary,
@@ -272,7 +272,7 @@ export class MobiusRuntime {
         status: "failed", completedAt: new Date().toISOString(), lastError: error,
         wakeAt: null, waitForEvent: null, failureCount,
       });
-      this.store.appendEvent(objective.id, "objective.failed", "mobius", { error });
+      this.store.appendEvent(objective.id, "objective.failed", "runtime", { error });
       return;
     }
     const delay = Math.min(
@@ -283,7 +283,7 @@ export class MobiusRuntime {
     this.store.updateObjective(objective.id, {
       status: "waiting", wakeAt, waitForEvent: null, lastError: error, failureCount,
     });
-    this.store.appendEvent(objective.id, "cycle.retry_scheduled", "mobius", { error, wakeAt });
+    this.store.appendEvent(objective.id, "cycle.retry_scheduled", "runtime", { error, wakeAt });
   }
 
   private failBudget(objective: Objective, error: string): void {
@@ -291,7 +291,7 @@ export class MobiusRuntime {
       status: "failed", completedAt: new Date().toISOString(), lastError: error,
       wakeAt: null, waitForEvent: null,
     });
-    this.store.appendEvent(objective.id, "objective.budget_exceeded", "mobius", { error });
+    this.store.appendEvent(objective.id, "objective.budget_exceeded", "runtime", { error });
   }
 
   private requireObjective(id: string): Objective {

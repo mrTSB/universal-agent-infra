@@ -2,11 +2,15 @@
 
 Customizable infrastructure for durable, general-purpose infinite-horizon agents.
 
-Aeon uses the Mobius architecture: each objective advances through bounded
-`observe -> plan -> act -> verify -> reflect -> report` wake cycles, then becomes
-dormant until useful work, a schedule, or an external event wakes it again. The
-durable runtime is domain-neutral and the model, instructions, tools, sub-agents,
+Aeon uses bounded wake cycles: each objective advances through
+`observe -> plan -> act -> verify -> reflect -> report`, then becomes dormant
+until useful work, a schedule, or an external event wakes it again. The durable
+runtime is domain-neutral and the model, instructions, tools, sub-agents,
 playbook, memory, budgets, risk policy, and approval gates are all SDK inputs.
+
+The wake-cycle design is based on
+[Mobius](https://x.com/BhathalTanvir0/status/2023896499848114427), Tanvir
+Bhathal's TreeHacks infinite-horizon agent project.
 
 The original interactive agent and swarm APIs remain available for one-off work.
 
@@ -106,7 +110,7 @@ snapshots, durable plan steps, events, memories, action ledger, outcomes,
 approvals, pause/resume/cancel, and approval resolution.
 
 See the Mintlify docs in [`docs/`](./docs/) (`mint dev` from that folder), plus
-[MOBIUS_ARCHITECTURE.md](./MOBIUS_ARCHITECTURE.md) and
+[WAKE_CYCLES.md](./WAKE_CYCLES.md) and
 [python/README.md](./python/README.md) for the full lifecycle and SDK reference.
 
 ## Safety Invariants

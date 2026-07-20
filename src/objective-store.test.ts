@@ -2,21 +2,21 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MobiusStore } from "./mobius-store.ts";
+import { ObjectiveStore } from "./objective-store.ts";
 
 const dirs: string[] = [];
 
-function createStore(): MobiusStore {
-  const dir = mkdtempSync(join(tmpdir(), "aeon-mobius-store-"));
+function createStore(): ObjectiveStore {
+  const dir = mkdtempSync(join(tmpdir(), "aeon-objective-store-"));
   dirs.push(dir);
-  return new MobiusStore(join(dir, "runtime.sqlite"));
+  return new ObjectiveStore(join(dir, "runtime.sqlite"));
 }
 
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-describe("MobiusStore", () => {
+describe("ObjectiveStore", () => {
   test("persists a customizable objective and playbook", () => {
     const store = createStore();
     const objective = store.createObjective({
@@ -48,7 +48,7 @@ describe("MobiusStore", () => {
     expect(steps[1]?.dependsOn).toEqual([steps[0]!.id]);
 
     store.close();
-    const reopened = new MobiusStore(join(dirs[0]!, "runtime.sqlite"));
+    const reopened = new ObjectiveStore(join(dirs[0]!, "runtime.sqlite"));
     expect(reopened.getObjective(objective.id)?.goal).toBe(objective.goal);
     expect(reopened.listSteps(objective.id)).toHaveLength(2);
     reopened.close();

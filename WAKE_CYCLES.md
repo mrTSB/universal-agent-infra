@@ -1,12 +1,16 @@
-# Aeon Mobius Architecture
+# Aeon Wake Cycles
 
 Aeon separates a long-lived objective from the short-lived model process that
 advances it. An objective can exist for months or years, while each model wake is
 small, bounded, auditable, and replaceable.
 
+The wake-cycle design is based on
+[Mobius](https://x.com/BhathalTanvir0/status/2023896499848114427), Tanvir
+Bhathal's TreeHacks infinite-horizon agent project.
+
 ## Control Loop
 
-Each wake executes one Mobius cycle:
+Each wake executes one wake cycle:
 
 1. **Observe** the objective, new events, plan graph, memories, outcomes, and workspace.
 2. **Plan** the smallest useful next step and persist plan changes.
@@ -20,7 +24,7 @@ kept alive while an objective is dormant.
 
 ## Durable Kernel
 
-`MobiusStore` is a SQLite journal with WAL mode and foreign keys. It stores:
+`ObjectiveStore` is a SQLite journal with WAL mode and foreign keys. It stores:
 
 | Record | Purpose |
 | --- | --- |

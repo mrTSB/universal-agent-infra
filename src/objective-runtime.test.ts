@@ -2,18 +2,18 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MobiusPolicyEngine } from "./mobius-policy.ts";
-import { MobiusRuntime } from "./mobius-runtime.ts";
-import { MobiusStore } from "./mobius-store.ts";
-import type { CycleResult } from "./mobius-types.ts";
+import { ObjectivePolicyEngine } from "./objective-policy.ts";
+import { ObjectiveRuntime } from "./objective-runtime.ts";
+import { ObjectiveStore } from "./objective-store.ts";
+import type { CycleResult } from "./objective-types.ts";
 
 const dirs: string[] = [];
 
-function setup(executor: ConstructorParameters<typeof MobiusRuntime>[1]) {
-  const dir = mkdtempSync(join(tmpdir(), "aeon-mobius-runtime-"));
+function setup(executor: ConstructorParameters<typeof ObjectiveRuntime>[1]) {
+  const dir = mkdtempSync(join(tmpdir(), "aeon-objective-runtime-"));
   dirs.push(dir);
-  const store = new MobiusStore(join(dir, "runtime.sqlite"));
-  const runtime = new MobiusRuntime(store, executor, { workerId: "test-worker" });
+  const store = new ObjectiveStore(join(dir, "runtime.sqlite"));
+  const runtime = new ObjectiveRuntime(store, executor, { workerId: "test-worker" });
   return { store, runtime };
 }
 
@@ -21,7 +21,7 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-describe("MobiusRuntime", () => {
+describe("ObjectiveRuntime", () => {
   test("runs one bounded cycle and waits for a matching event", async () => {
     const results: CycleResult[] = [
       {
@@ -136,7 +136,7 @@ describe("MobiusRuntime", () => {
       goal: "Deploy only with approval",
       policy: { toolRiskLevels: { deploy: "critical" }, approvalRiskLevel: "high" },
     });
-    const policy = new MobiusPolicyEngine(store);
+    const policy = new ObjectivePolicyEngine(store);
     const decision = policy.authorize(objective, "deploy", { environment: "production" }, "call-1");
     expect(decision.behavior).toBe("approval");
     expect(store.listApprovals(objective.id, "pending")).toHaveLength(1);
@@ -147,7 +147,7 @@ describe("MobiusRuntime", () => {
     const { store } = setup(async () => {
       throw new Error("not called");
     });
-    const policy = new MobiusPolicyEngine(store);
+    const policy = new ObjectivePolicyEngine(store);
     const capped = store.createObjective({
       goal: "Use at most one tool",
       budget: { maxToolCalls: 1 },

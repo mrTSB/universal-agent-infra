@@ -112,7 +112,7 @@ This guide creates a durable objective that wakes on events, respects budgets an
 </Steps>
 
 <Tip>
-  Each wake performs one bounded Mobius cycle, then exits through `continue`, `wait`, `block`, `complete`, or `fail`. Waiting objectives are dormant and consume no model tokens.
+  Each wake performs one bounded wake cycle, then exits through `continue`, `wait`, `block`, `complete`, or `fail`. Waiting objectives are dormant and consume no model tokens.
 </Tip>
 
 ## One-off tasks instead
@@ -130,7 +130,7 @@ print(run.result())
 ## Next steps
 
 <Columns cols={2}>
-  <Card title="Mobius architecture" icon="infinity" href="/concepts/mobius">
+  <Card title="Wake cycles" icon="infinity" href="/concepts/wake-cycles">
     How bounded wakes and durable state work together.
   </Card>
 

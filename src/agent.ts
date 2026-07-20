@@ -14,7 +14,7 @@ import type {
   MemoryKind,
   StepStatus,
   ToolAuthorization,
-} from "./mobius-types.ts";
+} from "./objective-types.ts";
 
 export type { SDKMessage };
 
@@ -242,7 +242,7 @@ export function createAgent(opts: AgentOptions): AgentHandle {
     return REPROMPT_MESSAGE;
   }
 
-  // ── Bounded Mobius cycle input stream ─────────────────────────────────────
+  // ── Bounded wake cycle input stream ─────────────────────────────────────
 
   async function* inputStream(): AsyncGenerator<SDKUserMessage, void, unknown> {
     yield makeUserMessage(buildInitialMessage());

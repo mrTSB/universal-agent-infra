@@ -1,19 +1,19 @@
 import { runBoundedCycle } from "./agent-run.ts";
-import { MobiusPolicyEngine } from "./mobius-policy.ts";
-import { MobiusRuntime } from "./mobius-runtime.ts";
-import { MobiusStore } from "./mobius-store.ts";
-import { DEFAULT_BUDGET, type Objective, type RuntimeEvent } from "./mobius-types.ts";
+import { ObjectivePolicyEngine } from "./objective-policy.ts";
+import { ObjectiveRuntime } from "./objective-runtime.ts";
+import { ObjectiveStore } from "./objective-store.ts";
+import { DEFAULT_BUDGET, type Objective, type RuntimeEvent } from "./objective-types.ts";
 import { SYSTEM_PROMPT } from "./system-prompt.ts";
 import * as toolRegistry from "./tool-registry.ts";
 
-export const objectiveStore = new MobiusStore();
-export const objectivePolicy = new MobiusPolicyEngine(objectiveStore);
+export const objectiveStore = new ObjectiveStore();
+export const objectivePolicy = new ObjectivePolicyEngine(objectiveStore);
 
-const MOBIUS_PROMPT = `
-## MOBIUS INFINITE-HORIZON RUNTIME
+const WAKE_CYCLE_PROMPT = `
+## WAKE-CYCLE INFINITE-HORIZON RUNTIME
 
 You are executing exactly one bounded wake cycle for a durable objective. Do not loop,
-poll, sleep, or wait inside this cycle. Follow the Mobius control loop:
+poll, sleep, or wait inside this cycle. Follow the wake-cycle control loop:
 
 1. Observe: inspect the objective, events, plan, memories, and current environment.
 2. Plan: choose the smallest useful next action and update durable plan steps.
@@ -32,7 +32,7 @@ Lifecycle rules:
 - Never invent a new objective. Stay grounded in the supplied goal.
 `;
 
-export const objectiveRuntime = new MobiusRuntime(objectiveStore, executeObjectiveCycle);
+export const objectiveRuntime = new ObjectiveRuntime(objectiveStore, executeObjectiveCycle);
 
 async function executeObjectiveCycle(
   objective: Objective,
@@ -50,8 +50,8 @@ async function executeObjectiveCycle(
   const remainingCost = Math.max(0.01, budget.maxCostUsd - objective.totalCostUsd);
   const customDefinition = objective.agent.systemPrompt?.trim();
   const systemPrompt = customDefinition
-    ? `${SYSTEM_PROMPT}\n\n## CUSTOM AGENT DEFINITION\n\n${customDefinition}${MOBIUS_PROMPT}`
-    : `${SYSTEM_PROMPT}${MOBIUS_PROMPT}`;
+    ? `${SYSTEM_PROMPT}\n\n## CUSTOM AGENT DEFINITION\n\n${customDefinition}${WAKE_CYCLE_PROMPT}`
+    : `${SYSTEM_PROMPT}${WAKE_CYCLE_PROMPT}`;
   const shellTools = new Set(
     toolRegistry.list()
       .filter((customTool) => customTool.executor.type === "shell")
@@ -116,7 +116,7 @@ function buildCyclePrompt(
     "",
     JSON.stringify(state, null, 2),
     "",
-    "Execute one Mobius cycle now and end with one lifecycle tool.",
+    "Execute one wake cycle now and end with one lifecycle tool.",
   ].join("\n");
 }
 
@@ -126,7 +126,7 @@ function updatePlanStep(
     id?: string;
     title?: string;
     description?: string;
-    status?: import("./mobius-types.ts").StepStatus;
+    status?: import("./objective-types.ts").StepStatus;
     result?: string;
     evidence?: unknown[];
   },

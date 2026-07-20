@@ -3,19 +3,19 @@ title: "Aeon SDK"
 description: "Build durable Python agents that pursue outcomes across bounded wake cycles."
 sidebarTitle: "Overview"
 icon: "infinity"
-keywords: ["aeon", "agents", "infinite horizon", "python sdk", "mobius", "durable agents"]
+keywords: ["aeon", "agents", "infinite horizon", "python sdk", "runtime", "durable agents"]
 ---
 
 Aeon is a Python SDK and runtime for agents that need to pursue outcomes across days, months, or years without keeping a model process alive the whole time.
 
-Define the agent, objective, tools, policy, memory, and budget in code. Aeon advances the work through bounded Mobius wake cycles, persists every ledger, and sleeps when there is nothing useful to do.
+Define the agent, objective, tools, policy, memory, and budget in code. Aeon advances the work through bounded wake cycles, persists every ledger, and sleeps when there is nothing useful to do.
 
 <Columns cols={2}>
   <Card title="Durable objectives" icon="target" href="/guides/objectives">
     Pursue outcomes that survive client restarts, server restarts, idle periods, and external event waits.
   </Card>
 
-  <Card title="Bounded wake cycles" icon="gauge" href="/concepts/mobius">
+  <Card title="Bounded wake cycles" icon="gauge" href="/concepts/wake-cycles">
     Each wake observes, plans, acts, verifies, reflects, and exits with hard turn, cost, and tool-call limits.
   </Card>
 
@@ -170,7 +170,7 @@ Define the agent, objective, tools, policy, memory, and budget in code. Aeon adv
     Learn how `Agent`, `Task`, `Run`, `Objective`, `Runtime`, and `Policy` fit together.
   </Card>
 
-  <Card title="Mobius architecture" icon="infinity" href="/concepts/mobius">
+  <Card title="Wake cycles" icon="infinity" href="/concepts/wake-cycles">
     See how bounded wakes, dormant waits, leases, and durable ledgers work.
   </Card>
 

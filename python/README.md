@@ -83,7 +83,7 @@ objective = Objective(
 run = agent.pursue(objective)  # Runtime().pursue(agent, objective) also works
 ```
 
-Each wake performs one bounded Mobius cycle and exits through `continue`, `wait`,
+Each wake performs one bounded wake cycle and exits through `continue`, `wait`,
 `block`, `complete`, or `fail`. Waiting objectives are dormant and consume no
 model tokens.
 

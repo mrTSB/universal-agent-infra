@@ -11,7 +11,7 @@ import type {
   MemoryKind,
   StepStatus,
   ToolAuthorization,
-} from "./mobius-types.ts";
+} from "./objective-types.ts";
 
 // ---------------------------------------------------------------------------
 // SDK event → UI broadcast

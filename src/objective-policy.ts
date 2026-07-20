@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
-import { MobiusStore } from "./mobius-store.ts";
+import { ObjectiveStore } from "./objective-store.ts";
 import {
   DEFAULT_RETRY,
   type Objective,
   type RiskLevel,
   type ToolAuthorization,
-} from "./mobius-types.ts";
+} from "./objective-types.ts";
 
 const RISK_ORDER: Record<RiskLevel, number> = {
   low: 0,
@@ -30,8 +30,8 @@ function stableInput(input: Record<string, unknown>): string {
   return JSON.stringify(canonicalize(input));
 }
 
-export class MobiusPolicyEngine {
-  constructor(private readonly store: MobiusStore) {}
+export class ObjectivePolicyEngine {
+  constructor(private readonly store: ObjectiveStore) {}
 
   authorize(
     objective: Objective,

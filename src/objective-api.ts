@@ -4,7 +4,7 @@ import {
   objectiveSnapshot,
   objectiveStore,
 } from "./objective-service.ts";
-import type { ObjectiveInput, ObjectiveStatus } from "./mobius-types.ts";
+import type { ObjectiveInput, ObjectiveStatus } from "./objective-types.ts";
 import { stopRun } from "./agent-run.ts";
 
 const OBJECTIVE_PREFIX = "/api/v1/objectives";
