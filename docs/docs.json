@@ -74,6 +74,10 @@
   "navbar": {
     "links": [
       {
+        "label": "Made by Tanvir Bhathal",
+        "href": "https://tanvirbhathal.com"
+      },
+      {
         "type": "github",
         "href": "https://github.com/mrTSB/universal-agent-infra"
       }
