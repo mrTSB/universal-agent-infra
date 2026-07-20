@@ -1,68 +1,184 @@
 ---
-title: "Aeon"
-description: "Python SDK for durable, universal infinite-horizon agents."
-keywords: ["aeon", "agents", "infinite horizon", "python sdk", "mobius"]
+title: "Aeon SDK"
+description: "Build durable Python agents that pursue outcomes across bounded wake cycles."
+sidebarTitle: "Overview"
+icon: "infinity"
+keywords: ["aeon", "agents", "infinite horizon", "python sdk", "mobius", "durable agents"]
 ---
 
-Aeon is customizable infrastructure for durable, general-purpose agents that can pursue outcomes across days, months, or years — without keeping a model process alive the whole time.
+Aeon is a Python SDK and runtime for agents that need to pursue outcomes across days, months, or years without keeping a model process alive the whole time.
 
-Install the Python package, define an agent and an objective, and let the runtime advance work through bounded wake cycles.
-
-```python
-from aeon import Agent, Budget, Objective, Playbook, PlaybookStep, Policy
-
-agent = Agent(
-    name="release-operator",
-    models=["claude-sonnet-4-6"],
-    system_prompt="Prefer reversible changes and verify every release.",
-    policy=Policy(
-        approval_required_tools=["deploy"],
-        tool_risk_levels={"deploy": "critical"},
-        workspace_only=True,
-    ),
-)
-
-run = agent.pursue(Objective(
-    goal="Keep this project releasable and publish verified releases.",
-    success_criteria=["Tests pass", "Release evidence is recorded"],
-    budget=Budget(max_cost_usd=20, max_cycles=10_000, max_turns_per_cycle=20),
-    playbook=Playbook(
-        name="verified-release",
-        steps=[
-            PlaybookStep("Inspect changes"),
-            PlaybookStep("Run verification"),
-            PlaybookStep("Publish with approval"),
-        ],
-    ),
-))
-
-run.emit("repository.changed", {"ref": "main"}, dedupe_key="push-123")
-```
-
-## Why Aeon
+Define the agent, objective, tools, policy, memory, and budget in code. Aeon advances the work through bounded Mobius wake cycles, persists every ledger, and sleeps when there is nothing useful to do.
 
 <Columns cols={2}>
-  <Card title="Infinite horizon" icon="infinity" href="/concepts/mobius">
-    Objectives survive restarts. Waiting work is dormant and spends no tokens until an event, schedule, or resume wakes it.
+  <Card title="Durable objectives" icon="target" href="/guides/objectives">
+    Pursue outcomes that survive client restarts, server restarts, idle periods, and external event waits.
   </Card>
-  <Card title="Bounded wakes" icon="gauge" href="/concepts/mobius">
-    Each wake runs one Mobius cycle — observe, plan, act, verify, reflect, report — with hard turn and cost limits.
+
+  <Card title="Bounded wake cycles" icon="gauge" href="/concepts/mobius">
+    Each wake observes, plans, acts, verifies, reflects, and exits with hard turn, cost, and tool-call limits.
   </Card>
-  <Card title="SDK-defined domain" icon="sliders" href="/concepts/overview">
-    Models, tools, playbooks, memory, budgets, risk policy, and approvals are all inputs. The kernel stays domain-neutral.
+
+  <Card title="Policy-aware tools" icon="shield-check" href="/guides/policy-and-approvals">
+    Deny risky tools, require approval by tool or risk level, contain workspace access, and retry safely.
   </Card>
-  <Card title="One-off and swarm APIs" icon="users" href="/guides/agents-and-tasks">
-    Interactive `Agent` / `Task` / `Run` and multi-agent `Swarm` APIs remain available for short-lived work.
+
+  <Card title="One-off and swarm runs" icon="users" href="/guides/agents-and-tasks">
+    Use the same SDK for short-lived tasks, interactive steering, streaming, and multi-agent swarms.
   </Card>
 </Columns>
 
-## Start here
+## Start in minutes
 
-<CardGroup cols={2}>
-  <Card title="Install" icon="download" href="/installation">
-    Install the Python SDK and start the Aeon server.
+<Steps>
+  <Step title="Run the Aeon server">
+    ```bash
+    pnpm install
+    cp .env.example .env
+    pnpm run agent
+    ```
+  </Step>
+
+  <Step title="Install the Python SDK">
+    ```bash
+    python -m pip install ./python
+    ```
+  </Step>
+
+  <Step title="Create a durable objective">
+    ```python
+    from aeon import Agent, Budget, Objective, Playbook, PlaybookStep, Policy
+
+    agent = Agent(
+        name="release-operator",
+        models=["claude-sonnet-4-6"],
+        system_prompt="Prefer reversible changes and verify every release.",
+        policy=Policy(
+            approval_required_tools=["deploy"],
+            tool_risk_levels={"deploy": "critical"},
+            workspace_only=True,
+        ),
+    )
+
+    run = agent.pursue(Objective(
+        goal="Keep this project releasable and publish verified releases.",
+        success_criteria=["Tests pass", "Release evidence is recorded"],
+        budget=Budget(max_cost_usd=20, max_cycles=10_000, max_turns_per_cycle=20),
+        playbook=Playbook(
+            name="verified-release",
+            steps=[
+                PlaybookStep("Inspect changes"),
+                PlaybookStep("Run verification"),
+                PlaybookStep("Publish with approval"),
+            ],
+        ),
+    ))
+
+    run.emit("repository.changed", {"ref": "main"}, dedupe_key="push-123")
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  Waiting objectives are dormant. They consume no model tokens until an event, schedule, or explicit resume queues the next wake.
+</Tip>
+
+## Pick the right execution mode
+
+<Tabs>
+  <Tab title="Durable objective" icon="infinity">
+    Use `pursue()` for work that needs durable state, external event wakeups, budgets, approvals, and long idle periods.
+
+    ```python
+    from aeon import Agent, Objective
+
+    agent = Agent(name="operator")
+    run = agent.pursue(Objective(goal="Keep the API healthy"))
+    run.emit("health.changed", {"healthy": False}, dedupe_key="api-1042")
+    ```
+  </Tab>
+
+  <Tab title="One-off task" icon="terminal">
+    Use `run()` for short-lived interactive work that should complete in a single session.
+
+    ```python
+    from aeon import Agent, Task, SONNET
+
+    agent = Agent(name="builder", models=[SONNET])
+    run = agent.run(Task("Build a CLI todo app in Python"))
+    print(run.result())
+    ```
+  </Tab>
+
+  <Tab title="Swarm" icon="users">
+    Use `Swarm` when an orchestrator should coordinate specialists that share a workspace and memory file.
+
+    ```python
+    from aeon import Swarm
+    from aeon.swarm import SubAgent
+
+    swarm = Swarm(agents=[
+        SubAgent("planner", role="Break work into milestones"),
+        SubAgent("critic", role="Review results and evidence"),
+    ])
+
+    run = swarm.run("Ship a tested CLI todo app")
+    ```
+  </Tab>
+</Tabs>
+
+## What Aeon persists
+
+<Columns cols={3}>
+  <Card title="Plan graph" icon="list-checks">
+    Dependency-aware steps, attempts, evidence, and results for every wake.
   </Card>
+
+  <Card title="Event journal" icon="radio">
+    External and internal wake signals with deduplication and consumption state.
+  </Card>
+
+  <Card title="Action ledger" icon="scroll-text">
+    Tool intent, risk, idempotency keys, attempts, outputs, and errors.
+  </Card>
+
+  <Card title="Memory" icon="brain">
+    Working, episodic, semantic, and procedural knowledge with provenance.
+  </Card>
+
+  <Card title="Approvals" icon="badge-check">
+    Durable human decisions for policy-gated actions that can resume safely.
+  </Card>
+
+  <Card title="Checkpoints" icon="rotate-ccw">
+    Pre-cycle snapshots for inspection, recovery, and restart resilience.
+  </Card>
+</Columns>
+
+## Explore next
+
+<Columns cols={3}>
+  <Card title="Install Aeon" icon="download" href="/installation">
+    Set up the server, SDK, environment variables, and smoke tests.
+  </Card>
+
   <Card title="Quickstart" icon="play" href="/quickstart">
     Pursue your first durable objective in a few lines of Python.
   </Card>
-</CardGroup>
+
+  <Card title="Core concepts" icon="blocks" href="/concepts/overview">
+    Learn how `Agent`, `Task`, `Run`, `Objective`, `Runtime`, and `Policy` fit together.
+  </Card>
+
+  <Card title="Mobius architecture" icon="infinity" href="/concepts/mobius">
+    See how bounded wakes, dormant waits, leases, and durable ledgers work.
+  </Card>
+
+  <Card title="Objectives guide" icon="target" href="/guides/objectives">
+    Configure events, budgets, playbooks, ledgers, approvals, and reconnects.
+  </Card>
+
+  <Card title="SDK reference" icon="square-terminal" href="/reference/sdk">
+    Browse the Python classes, methods, model constants, and package layout.
+  </Card>
+</Columns>

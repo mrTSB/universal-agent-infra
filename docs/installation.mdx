@@ -1,6 +1,7 @@
 ---
 title: "Installation"
 description: "Install the Aeon Python SDK and start the server."
+icon: "download"
 keywords: ["install", "pip", "aeon-agents", "setup"]
 ---
 
@@ -8,63 +9,99 @@ Aeon has two parts: a durable agent server, and a Python SDK that talks to it.
 
 ## Prerequisites
 
-- Python 3.9+
-- Node.js / Bun or pnpm (to run the Aeon server)
-- An Anthropic API key for model-backed runs
+<Columns cols={3}>
+  <Card title="Python 3.9+" icon="python">
+    Required for the `aeon-agents` SDK.
+  </Card>
 
-## Install the Python SDK
+  <Card title="Node, pnpm, or Bun" icon="terminal">
+    Required to run the local Aeon server.
+  </Card>
 
-From the repository root:
+  <Card title="Anthropic API key" icon="key">
+    Required for model-backed agent runs.
+  </Card>
+</Columns>
 
-```bash
-python -m pip install ./python
-```
+## Set up Aeon
 
-The package name is `aeon-agents`; you import it as `aeon`:
+<Steps>
+  <Step title="Install the Python SDK">
+    From the repository root:
 
-```python
-from aeon import Agent, Objective, Runtime
-```
+    ```bash
+    python -m pip install ./python
+    ```
 
-## Start the server
+    The package name is `aeon-agents`; you import it as `aeon`:
 
-The SDK requires a running Aeon server.
+    ```python
+    from aeon import Agent, Objective, Runtime
+    ```
+  </Step>
 
-```bash
-pnpm install
-cp .env.example .env
-# set ANTHROPIC_API_KEY=sk-ant-...
-pnpm run agent
-```
+  <Step title="Configure credentials">
+    ```bash
+    pnpm install
+    cp .env.example .env
+    # set ANTHROPIC_API_KEY=sk-ant-...
+    ```
+  </Step>
 
-Or with Bun:
+  <Step title="Start the server">
+    The SDK requires a running Aeon server.
 
-```bash
-bun run agent
-```
+    <Tabs>
+      <Tab title="pnpm">
+        ```bash
+        pnpm run agent
+        ```
+      </Tab>
 
-By default the SDK connects to `http://localhost:3000`. Override with:
+      <Tab title="Bun">
+        ```bash
+        bun run agent
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
 
-```bash
-export AEON_SERVER=http://your-host:3000
-```
+  <Step title="Point the SDK at another server">
+    By default the SDK connects to `http://localhost:3000`. Override it from the shell:
 
-Or pass a URL to `Runtime`:
+    ```bash
+    export AEON_SERVER=http://your-host:3000
+    ```
 
-```python
-from aeon import Runtime
+    Or pass a URL to `Runtime`:
 
-runtime = Runtime("http://remote:3000")
-```
+    ```python
+    from aeon import Runtime
+
+    runtime = Runtime("http://remote:3000")
+    ```
+  </Step>
+</Steps>
 
 ## Environment variables
 
-| Variable | Required | Description |
-| --- | --- | --- |
-| `ANTHROPIC_API_KEY` | Yes (for model runs) | Direct Anthropic API key for the main agent |
-| `AEON_SERVER` | No | SDK server URL (default `http://localhost:3000`) |
-| `CLAUDE_MODEL` | No | Default Claude model on the server |
-| `GEMINI_API_KEY` | No | Only used for Browserbase Stagehand browser tools |
+<Columns cols={2}>
+  <Card title="ANTHROPIC_API_KEY" icon="key">
+    Required for model runs. Direct Anthropic API key for the main agent.
+  </Card>
+
+  <Card title="AEON_SERVER" icon="server">
+    Optional SDK server URL. Defaults to `http://localhost:3000`.
+  </Card>
+
+  <Card title="CLAUDE_MODEL" icon="brain">
+    Optional default Claude model on the server.
+  </Card>
+
+  <Card title="GEMINI_API_KEY" icon="globe">
+    Optional. Only used for Browserbase Stagehand browser tools.
+  </Card>
+</Columns>
 
 <Warning>
 If `ANTHROPIC_API_KEY` is missing, server startup exits immediately. Old Vertex env vars are ignored.
@@ -76,7 +113,7 @@ If `ANTHROPIC_API_KEY` is missing, server startup exits immediately. Old Vertex 
 pnpm test:sdk
 ```
 
-This creates a clean virtual environment, installs `python/` with pip (non-editable), and runs SDK contract tests against a local HTTP test server — no API credentials required.
+This creates a clean virtual environment, installs `python/` with pip, and runs SDK contract tests against a local HTTP test server. No API credentials are required.
 
 For a live smoke test against a running, configured server:
 
@@ -86,4 +123,6 @@ AEON_SERVER=http://localhost:3000 pnpm test:sdk:live
 
 ## Next step
 
-Continue to the [quickstart](/quickstart) to pursue your first objective.
+<Card title="Quickstart" icon="play" href="/quickstart">
+  Pursue your first durable objective and inspect its plan, events, memories, actions, and approvals.
+</Card>
