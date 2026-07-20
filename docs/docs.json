@@ -74,7 +74,7 @@
   "navbar": {
     "links": [
       {
-        "label": "GitHub",
+        "type": "github",
         "href": "https://github.com/mrTSB/universal-agent-infra"
       }
     ]
