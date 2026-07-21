@@ -44,6 +44,8 @@ Aeon has two parts: a durable agent server, and a Python SDK that talks to it.
     cp .env.example .env
     # set ANTHROPIC_API_KEY=sk-ant-...
     ```
+
+    You can also paste the key later in the dashboard at `http://localhost:3000`.
   </Step>
 
   <Step title="Start the server">
@@ -102,7 +104,7 @@ Aeon has two parts: a durable agent server, and a Python SDK that talks to it.
 </Columns>
 
 <Warning>
-If `ANTHROPIC_API_KEY` is missing, server startup exits immediately. Old Vertex env vars are ignored.
+Model-backed runs and `pursue()` require `ANTHROPIC_API_KEY`. The server still starts without it so you can open the dashboard and add the key. Old Vertex env vars are ignored.
 </Warning>
 
 ## Verify the install

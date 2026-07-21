@@ -6,8 +6,8 @@ class ServerNotRunningError(AeonError):
     def __str__(self):
         return (
             "Cannot connect to Aeon server. "
-            "Start it with: bun run agent  (from the project root)\n"
-            "Or use: aeon start"
+            "From the repository root, start it with: bun run agent "
+            "(or pnpm run agent)."
         )
 
 

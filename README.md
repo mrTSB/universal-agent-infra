@@ -44,7 +44,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-If `ANTHROPIC_API_KEY` is missing, startup exits immediately with a clear error instead of falling back to Vertex.
+If `ANTHROPIC_API_KEY` is missing, the server still starts so you can add the key in Settings; model runs and `pursue()` fail until it is set. Old Vertex env vars are ignored.
 
 Old Vertex env vars are ignored now. `GEMINI_API_KEY` still does not power the main agent; it only helps Browserbase Stagehand browser tools when browser automation is enabled.
 
